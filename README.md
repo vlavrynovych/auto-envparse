@@ -13,7 +13,7 @@ Most environment variable libraries require you to define schemas, validators, o
 Following [12-Factor App](https://12factor.net/config) principles, auto-envparse makes configuration through environment variables effortless and type-safe, allowing you to store config in the environment without complex setup.
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import autoEnv from 'auto-envparse';
 
 const config = {
     host: 'localhost',
@@ -23,7 +23,7 @@ const config = {
 };
 
 // Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true, DB_POOL_SIZE=20
-parseEnv(config, 'DB');
+autoEnv(config, 'DB');
 
 console.log(config);
 // {
@@ -59,7 +59,7 @@ npm install auto-envparse
 ### Basic Usage
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import autoEnv from 'auto-envparse';
 
 const config = {
     apiUrl: 'http://localhost:3000',
@@ -68,7 +68,7 @@ const config = {
 };
 
 // Environment variables: APP_API_URL, APP_TIMEOUT, APP_DEBUG
-parseEnv(config, 'APP');
+autoEnv(config, 'APP');
 ```
 
 You can also use the `parse` alias:
@@ -100,13 +100,13 @@ const config = {
 // DB_DATABASE_SSL=true
 // DB_REDIS_HOST=prod-redis.example.com
 // DB_REDIS_PORT=6380
-parseEnv(config, 'DB');
+autoEnv(config, 'DB');
 ```
 
 ### Custom Validation with Overrides
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import autoEnv from 'auto-envparse';
 
 const config = {
     port: 3000,
@@ -138,7 +138,7 @@ overrides.set('environment', (obj, envVar) => {
     }
 });
 
-parseEnv(config, 'APP', overrides);
+autoEnv(config, 'APP', overrides);
 ```
 
 ## Type Coercion
@@ -171,43 +171,41 @@ const config = {
     connectionTimeout: 30 // → APP_CONNECTION_TIMEOUT
 };
 
-parseEnv(config, 'APP');
+autoEnv(config, 'APP');
 ```
 
 ## Advanced Usage
 
 ### Using Individual Utility Functions
 
-For advanced use cases, utility functions are accessible via the `AutoEnv` class:
-
 ```typescript
-import { AutoEnv } from 'auto-envparse';
+import { parseBoolean, parseNumber, toSnakeCase, coerceValue } from 'auto-envparse';
 
 // Parse booleans
-AutoEnv.parseBoolean('true');  // true
-AutoEnv.parseBoolean('1');     // true
-AutoEnv.parseBoolean('yes');   // true
+parseBoolean('true');  // true
+parseBoolean('1');     // true
+parseBoolean('yes');   // true
 
 // Parse numbers
-AutoEnv.parseNumber('42');     // 42
-AutoEnv.parseNumber('3.14');   // 3.14
+parseNumber('42');     // 42
+parseNumber('3.14');   // 3.14
 
 // Convert names
-AutoEnv.toSnakeCase('poolSize');  // 'pool_size'
+toSnakeCase('poolSize');  // 'pool_size'
 
 // Type coercion
-AutoEnv.coerceValue('42', 'number');    // 42
-AutoEnv.coerceValue('true', 'boolean'); // true
-AutoEnv.coerceValue('hello', 'string'); // 'hello'
+coerceValue('42', 'number');    // 42
+coerceValue('true', 'boolean'); // true
+coerceValue('hello', 'string'); // 'hello'
 ```
 
 ### Loading Nested Objects Separately
 
 ```typescript
-import { AutoEnv } from 'auto-envparse';
+import { loadNestedFromEnv } from 'auto-envparse';
 
 // Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
-const loggingConfig = AutoEnv.loadNestedFromEnv('APP_LOGGING', {
+const loggingConfig = loadNestedFromEnv('APP_LOGGING', {
     enabled: false,
     path: './logs',
     maxFiles: 10
@@ -235,7 +233,7 @@ AutoEnv.parse(config, 'DB');
 ### Database Configuration
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import autoEnv from 'auto-envparse';
 
 const dbConfig = {
     host: 'localhost',
@@ -251,7 +249,7 @@ const dbConfig = {
     }
 };
 
-parseEnv(dbConfig, 'DATABASE');
+autoEnv(dbConfig, 'DATABASE');
 
 // Supported env vars:
 // DATABASE_HOST
@@ -268,7 +266,7 @@ parseEnv(dbConfig, 'DATABASE');
 ### Application Configuration
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import autoEnv from 'auto-envparse';
 
 const appConfig = {
     port: 3000,
@@ -289,13 +287,13 @@ const appConfig = {
     }
 };
 
-parseEnv(appConfig, 'APP');
+autoEnv(appConfig, 'APP');
 ```
 
 ### Microservices Configuration
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import autoEnv from 'auto-envparse';
 
 const services = {
     auth: {
@@ -312,7 +310,7 @@ const services = {
     }
 };
 
-parseEnv(services, 'SERVICES');
+autoEnv(services, 'SERVICES');
 
 // Env vars:
 // SERVICES_AUTH_URL=https://auth.example.com
@@ -333,11 +331,11 @@ parseEnv(services, 'SERVICES');
 | TypeScript | ✅ | ✅ | ✅ | ✅ |
 | Dependencies | 0 | 1 | 2 | 0 |
 
-**auto-envparse** is the only library that uses reflection and type inference to eliminate schema definitions entirely.
+**auto-env** is the only library that uses reflection and type inference to eliminate schema definitions entirely.
 
 ## TypeScript Support
 
-auto-envparse is written in TypeScript and provides full type safety:
+auto-env is written in TypeScript and provides full type safety:
 
 ```typescript
 interface Config {
@@ -352,7 +350,7 @@ const config: Config = {
     ssl: false
 };
 
-parseEnv(config, 'DB');
+autoEnv(config, 'DB');
 
 // config.host is typed as string
 // config.port is typed as number
@@ -365,7 +363,7 @@ For detailed API documentation, see [API.md](./API.md).
 
 ## How It Works
 
-auto-envparse uses JavaScript reflection to:
+auto-env uses JavaScript reflection to:
 
 1. **Discover properties** - Iterate through your object's own properties
 2. **Infer types** - Determine types from default values

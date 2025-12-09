@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import parseEnv, { parse, AutoEnv, createFrom } from '../src/index';
+import autoEnv, { parse, AutoEnv, parseBoolean, parseNumber, toSnakeCase, coerceValue, loadNestedFromEnv } from '../src/index';
 
 /**
  * Tests for src/index.ts to ensure all exports are accessible
- * and the main parseEnv function works correctly.
+ * and the main autoEnv function works correctly.
  */
 describe('Index Exports', () => {
     // Store original env vars to restore after tests
@@ -33,9 +33,9 @@ describe('Index Exports', () => {
     });
 
     describe('Default export', () => {
-        it('should export parseEnv as default function', () => {
-            expect(parseEnv).toBeDefined();
-            expect(typeof parseEnv).toBe('function');
+        it('should export autoEnv as default function', () => {
+            expect(autoEnv).toBeDefined();
+            expect(typeof autoEnv).toBe('function');
         });
 
         it('should work with default export', () => {
@@ -47,7 +47,7 @@ describe('Index Exports', () => {
             process.env.TEST_HOST = 'example.com';
             process.env.TEST_PORT = '3306';
 
-            parseEnv(config, 'TEST');
+            autoEnv(config, 'TEST');
 
             expect(config.host).toBe('example.com');
             expect(config.port).toBe(3306);
@@ -55,10 +55,10 @@ describe('Index Exports', () => {
     });
 
     describe('Named exports', () => {
-        it('should export parse as alias to parseEnv', () => {
+        it('should export parse as alias to autoEnv', () => {
             expect(parse).toBeDefined();
             expect(typeof parse).toBe('function');
-            expect(parse).toBe(parseEnv);
+            expect(parse).toBe(autoEnv);
         });
 
         it('should export AutoEnv class', () => {
@@ -67,24 +67,52 @@ describe('Index Exports', () => {
             expect(typeof AutoEnv.parse).toBe('function');
         });
 
-        it('should export createFrom function', () => {
-            expect(createFrom).toBeDefined();
-            expect(typeof createFrom).toBe('function');
+        it('should export parseBoolean', () => {
+            expect(parseBoolean).toBeDefined();
+            expect(typeof parseBoolean).toBe('function');
+            expect(parseBoolean('true')).toBe(true);
+            expect(parseBoolean('false')).toBe(false);
         });
 
-        it('should verify utility functions are accessible via AutoEnv', () => {
-            // Utility functions removed from named exports but still accessible via AutoEnv
-            expect(typeof AutoEnv.parseBoolean).toBe('function');
-            expect(typeof AutoEnv.parseNumber).toBe('function');
-            expect(typeof AutoEnv.toSnakeCase).toBe('function');
-            expect(typeof AutoEnv.coerceValue).toBe('function');
-            expect(typeof AutoEnv.loadNestedFromEnv).toBe('function');
+        it('should export parseNumber', () => {
+            expect(parseNumber).toBeDefined();
+            expect(typeof parseNumber).toBe('function');
+            expect(parseNumber('42')).toBe(42);
+            expect(parseNumber('3.14')).toBe(3.14);
+        });
 
-            // Verify they still work
-            expect(AutoEnv.parseBoolean('true')).toBe(true);
-            expect(AutoEnv.parseNumber('42')).toBe(42);
-            expect(AutoEnv.toSnakeCase('poolSize')).toBe('pool_size');
-            expect(AutoEnv.coerceValue('true', 'boolean')).toBe(true);
+        it('should export toSnakeCase', () => {
+            expect(toSnakeCase).toBeDefined();
+            expect(typeof toSnakeCase).toBe('function');
+            expect(toSnakeCase('poolSize')).toBe('pool_size');
+        });
+
+        it('should export coerceValue', () => {
+            expect(coerceValue).toBeDefined();
+            expect(typeof coerceValue).toBe('function');
+            expect(coerceValue('true', 'boolean')).toBe(true);
+            expect(coerceValue('42', 'number')).toBe(42);
+            expect(coerceValue('hello', 'string')).toBe('hello');
+        });
+
+        it('should export loadNestedFromEnv', () => {
+            expect(loadNestedFromEnv).toBeDefined();
+            expect(typeof loadNestedFromEnv).toBe('function');
+
+            process.env.TEST_CONFIG_ENABLED = 'true';
+            process.env.TEST_CONFIG_MAX_FILES = '20';
+
+            const result = loadNestedFromEnv('TEST_CONFIG', {
+                enabled: false,
+                path: './logs',
+                maxFiles: 10
+            });
+
+            expect(result).toEqual({
+                enabled: true,
+                path: './logs',
+                maxFiles: 20
+            });
         });
     });
 
@@ -100,7 +128,7 @@ describe('Index Exports', () => {
             overrides.set('retries', (obj: typeof config, envVar: string) => {
                 const value = process.env[envVar];
                 if (value) {
-                    const num = AutoEnv.parseNumber(value); // Using AutoEnv utility
+                    const num = parseNumber(value); // Using named export utility
                     if (!isNaN(num) && num > 0) {
                         obj.retries = num;
                     }
@@ -111,7 +139,7 @@ describe('Index Exports', () => {
             process.env.TEST_PORT = '3306';
             process.env.TEST_RETRIES = '5';
 
-            parseEnv(config, 'TEST', overrides); // Using default export
+            autoEnv(config, 'TEST', overrides); // Using default export
 
             expect(config.host).toBe('example.com');
             expect(config.port).toBe(3306);
@@ -131,21 +159,6 @@ describe('Index Exports', () => {
 
             expect(config.host).toBe('db.example.com');
             expect(config.port).toBe(5433);
-        });
-
-        it('should work with createFrom', () => {
-            class TestConfig {
-                host = 'localhost';
-                port = 5432;
-            }
-
-            process.env.TEST_HOST = 'created.example.com';
-            process.env.TEST_PORT = '5434';
-
-            const config = createFrom(TestConfig, 'TEST');
-
-            expect(config.host).toBe('created.example.com');
-            expect(config.port).toBe(5434);
         });
     });
 });
