@@ -53,6 +53,29 @@ export { AutoEnv };
  */
 export const parse = autoEnv;
 
+/**
+ * Create and populate an instance from a class constructor.
+ *
+ * @param classConstructor - Class constructor function with default values
+ * @param prefix - Optional environment variable prefix
+ * @param overrides - Optional custom parsers for specific properties
+ * @returns New instance of the class populated from environment variables
+ *
+ * @example
+ * ```typescript
+ * import { createFrom } from 'auto-envparse';
+ *
+ * class DatabaseConfig {
+ *     host = 'localhost';
+ *     port = 5432;
+ *     ssl = false;
+ * }
+ *
+ * const config = createFrom(DatabaseConfig, 'DB');
+ * ```
+ */
+export const createFrom = AutoEnv.createFrom.bind(AutoEnv);
+
 export const parseBoolean = AutoEnv.parseBoolean.bind(AutoEnv);
 export const parseNumber = AutoEnv.parseNumber.bind(AutoEnv);
 export const toSnakeCase = AutoEnv.toSnakeCase.bind(AutoEnv);

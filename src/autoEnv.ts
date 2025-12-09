@@ -100,6 +100,52 @@ export class AutoEnv {
     }
 
     /**
+     * Create and populate an instance from a class constructor.
+     *
+     * This method instantiates a class and populates it from environment variables.
+     * Perfect for when you already have classes with default values defined.
+     *
+     * @param classConstructor - Class constructor function with default values
+     * @param prefix - Optional environment variable prefix. Defaults to empty string.
+     * @param overrides - Optional custom parsers for specific properties
+     * @returns New instance of the class populated from environment variables
+     *
+     * @example
+     * ```typescript
+     * class DatabaseConfig {
+     *     host = 'localhost';
+     *     port = 5432;
+     *     ssl = false;
+     * }
+     *
+     * // Environment: DB_HOST=prod.example.com, DB_PORT=5433, DB_SSL=true
+     * const config = AutoEnv.createFrom(DatabaseConfig, 'DB');
+     * // config is instance of DatabaseConfig with env values applied
+     * ```
+     *
+     * @example
+     * ```typescript
+     * class AppConfig {
+     *     nodeEnv = 'development';
+     *     port = 3000;
+     *     debug = false;
+     * }
+     *
+     * // Environment: NODE_ENV=production, PORT=8080, DEBUG=true
+     * const config = AutoEnv.createFrom(AppConfig); // No prefix
+     * ```
+     */
+    static createFrom<T extends { new(): object }>(
+        classConstructor: T,
+        prefix?: string,
+        overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
+    ): InstanceType<T> {
+        const instance = new classConstructor() as InstanceType<T>;
+        this.parse(instance, prefix, overrides);
+        return instance;
+    }
+
+    /**
      * Build environment variable name from prefix and property key.
      *
      * @param prefix - Optional prefix (empty string if not provided)

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import autoEnv, { parse, AutoEnv, parseBoolean, parseNumber, toSnakeCase, coerceValue, loadNestedFromEnv } from '../src/index';
+import autoEnv, { parse, AutoEnv, createFrom, parseBoolean, parseNumber, toSnakeCase, coerceValue, loadNestedFromEnv } from '../src/index';
 
 /**
  * Tests for src/index.ts to ensure all exports are accessible
@@ -113,6 +113,29 @@ describe('Index Exports', () => {
                 path: './logs',
                 maxFiles: 20
             });
+        });
+
+        it('should export createFrom', () => {
+            expect(createFrom).toBeDefined();
+            expect(typeof createFrom).toBe('function');
+
+            class TestConfig {
+                host: string = 'localhost';
+                port: number = 3000;
+            }
+
+            process.env.TEST_HOST = 'example.com';
+            process.env.TEST_PORT = '8080';
+
+            const config = createFrom(TestConfig, 'TEST');
+
+            expect(config).toBeInstanceOf(TestConfig);
+            expect(config.host).toBe('example.com');
+            expect(config.port).toBe(8080);
+
+            // Cleanup
+            delete process.env.TEST_HOST;
+            delete process.env.TEST_PORT;
         });
     });
 

@@ -250,6 +250,139 @@ console.log(serverConfig);
 
 ---
 
+#### AutoEnv.createFrom()
+
+Create and populate an instance from a class constructor.
+
+```typescript
+class AutoEnv {
+    static createFrom<T extends { new(): object }>(
+        classConstructor: T,
+        prefix?: string,
+        overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
+    ): InstanceType<T>;
+}
+```
+
+**Parameters:**
+
+- **classConstructor**: `T extends { new(): object }`
+  - Class constructor function with default values
+  - Must have a parameterless constructor
+  - Properties should have default values defined
+
+- **prefix**: `string` *(optional)*
+  - Environment variable prefix (e.g., `'DB'`, `'APP'`)
+  - **Default**: `''` (empty string - no prefix)
+  - When omitted, looks for env vars without prefix
+
+- **overrides**: `Map<string, (target: InstanceType<T>, envVarName: string) => void>` *(optional)*
+  - Custom parsers for specific properties
+  - Same as `parse()` overrides
+
+**Returns:**
+
+`InstanceType<T>` - New instance of the class populated from environment variables
+
+**Example with Prefix:**
+
+```typescript
+import { createFrom } from 'auto-envparse';
+
+class DatabaseConfig {
+    host = 'localhost';
+    port = 5432;
+    ssl = false;
+    poolSize = 10;
+}
+
+// Environment: DB_HOST=prod.example.com, DB_PORT=5433, DB_SSL=true
+const config = createFrom(DatabaseConfig, 'DB');
+
+console.log(config);
+// DatabaseConfig {
+//   host: 'prod.example.com',
+//   port: 5433,
+//   ssl: true,
+//   poolSize: 10
+// }
+```
+
+**Example without Prefix:**
+
+```typescript
+import { createFrom } from 'auto-envparse';
+
+class AppConfig {
+    nodeEnv = 'development';
+    port = 3000;
+    debug = false;
+}
+
+// Environment: NODE_ENV=production, PORT=8080, DEBUG=true
+const config = createFrom(AppConfig);
+
+console.log(config);
+// AppConfig {
+//   nodeEnv: 'production',
+//   port: 8080,
+//   debug: true
+// }
+```
+
+**Example with Methods:**
+
+```typescript
+import { createFrom } from 'auto-envparse';
+
+class ServerConfig {
+    host = '0.0.0.0';
+    port = 3000;
+
+    getUrl(): string {
+        return `http://${this.host}:${this.port}`;
+    }
+}
+
+// Environment: SERVER_HOST=example.com, SERVER_PORT=8080
+const config = createFrom(ServerConfig, 'SERVER');
+
+console.log(config.getUrl()); // 'http://example.com:8080'
+```
+
+**Example with Overrides:**
+
+```typescript
+import { createFrom } from 'auto-envparse';
+
+class ApiConfig {
+    port = 3000;
+    environment = 'development';
+}
+
+const overrides = new Map();
+overrides.set('environment', (obj, envVar) => {
+    const value = process.env[envVar];
+    const validEnvs = ['development', 'staging', 'production'];
+    if (value && validEnvs.includes(value)) {
+        obj.environment = value;
+    } else {
+        throw new Error(`Invalid environment: ${value}`);
+    }
+});
+
+const config = createFrom(ApiConfig, 'API', overrides);
+```
+
+**Use Cases:**
+
+- **Existing codebases** - You already have classes with defaults defined
+- **Less boilerplate** - No need to manually instantiate then parse
+- **Type safety** - Returns properly typed class instance
+- **MSR-style projects** - Projects using class-based configuration
+
+---
+
 #### AutoEnv.coerceValue()
 
 Convert a string value to the specified type.

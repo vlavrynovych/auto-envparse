@@ -163,6 +163,46 @@ overrides.set('environment', (obj, envVar) => {
 autoEnv(config, 'APP', overrides);
 ```
 
+### Class-Based Configuration
+
+If you have existing classes with default values, use `createFrom()` to create and populate instances in one step:
+
+```typescript
+import { createFrom } from 'auto-envparse';
+
+class DatabaseConfig {
+    host = 'localhost';
+    port = 5432;
+    ssl = false;
+    poolSize = 10;
+}
+
+// Environment: DB_HOST=prod.com, DB_PORT=5433, DB_SSL=true
+const config = createFrom(DatabaseConfig, 'DB');
+// Returns instance of DatabaseConfig with values from environment
+```
+
+This is perfect for:
+- **Existing codebases** - Classes already defined with defaults
+- **MSR-style projects** - Projects using class-based configuration
+- **Less boilerplate** - No need to manually instantiate before parsing
+- **Type safety** - Returns properly typed class instance
+
+```typescript
+// Works with methods too
+class ServerConfig {
+    host = '0.0.0.0';
+    port = 3000;
+
+    getUrl(): string {
+        return `http://${this.host}:${this.port}`;
+    }
+}
+
+const config = createFrom(ServerConfig, 'SERVER');
+console.log(config.getUrl()); // Uses env values
+```
+
 ## Type Coercion
 
 auto-envparse automatically converts string environment variables to the correct type based on your default values:

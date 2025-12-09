@@ -483,6 +483,165 @@ describe('AutoEnv - Standalone Usage', () => {
         });
     });
 
+    describe('createFrom() - Class-based instantiation', () => {
+        it('should create and populate instance from class with prefix', () => {
+            class DatabaseConfig {
+                host: string = 'localhost';
+                port: number = 5432;
+                ssl: boolean = false;
+            }
+
+            process.env.DB_HOST = 'prod.example.com';
+            process.env.DB_PORT = '5433';
+            process.env.DB_SSL = 'true';
+
+            const config = AutoEnv.createFrom(DatabaseConfig, 'DB');
+
+            expect(config).toBeInstanceOf(DatabaseConfig);
+            expect(config.host).toBe('prod.example.com');
+            expect(config.port).toBe(5433);
+            expect(config.ssl).toBe(true);
+
+            // Cleanup
+            delete process.env.DB_HOST;
+            delete process.env.DB_PORT;
+            delete process.env.DB_SSL;
+        });
+
+        it('should create and populate instance from class without prefix', () => {
+            class AppConfig {
+                nodeEnv: string = 'development';
+                port: number = 3000;
+                debug: boolean = false;
+            }
+
+            process.env.NODE_ENV = 'production';
+            process.env.PORT = '8080';
+            process.env.DEBUG = 'true';
+
+            const config = AutoEnv.createFrom(AppConfig);
+
+            expect(config).toBeInstanceOf(AppConfig);
+            expect(config.nodeEnv).toBe('production');
+            expect(config.port).toBe(8080);
+            expect(config.debug).toBe(true);
+
+            // Cleanup
+            delete process.env.NODE_ENV;
+            delete process.env.PORT;
+            delete process.env.DEBUG;
+        });
+
+        it('should create instance with nested objects', () => {
+            class ServerConfig {
+                host: string = '0.0.0.0';
+                port: number = 3000;
+                database = {
+                    host: 'localhost',
+                    port: 5432
+                };
+            }
+
+            process.env.SERVER_HOST = '127.0.0.1';
+            process.env.SERVER_PORT = '4000';
+            process.env.SERVER_DATABASE_HOST = 'db.example.com';
+            process.env.SERVER_DATABASE_PORT = '5433';
+
+            const config = AutoEnv.createFrom(ServerConfig, 'SERVER');
+
+            expect(config).toBeInstanceOf(ServerConfig);
+            expect(config.host).toBe('127.0.0.1');
+            expect(config.port).toBe(4000);
+            expect(config.database.host).toBe('db.example.com');
+            expect(config.database.port).toBe(5433);
+
+            // Cleanup
+            delete process.env.SERVER_HOST;
+            delete process.env.SERVER_PORT;
+            delete process.env.SERVER_DATABASE_HOST;
+            delete process.env.SERVER_DATABASE_PORT;
+        });
+
+        it('should support custom overrides', () => {
+            class ApiConfig {
+                port: number = 3000;
+                environment: string = 'development';
+            }
+
+            const overrides = new Map();
+            overrides.set('port', (obj: ApiConfig, envVar: string) => {
+                const value = process.env[envVar];
+                if (value) {
+                    const port = parseInt(value, 10);
+                    if (port >= 1 && port <= 65535) {
+                        obj.port = port;
+                    } else {
+                        throw new Error(`Invalid port: ${port}`);
+                    }
+                }
+            });
+
+            process.env.API_PORT = '8443';
+            process.env.API_ENVIRONMENT = 'production';
+
+            const config = AutoEnv.createFrom(ApiConfig, 'API', overrides);
+
+            expect(config).toBeInstanceOf(ApiConfig);
+            expect(config.port).toBe(8443);
+            expect(config.environment).toBe('production');
+
+            // Cleanup
+            delete process.env.API_PORT;
+            delete process.env.API_ENVIRONMENT;
+        });
+
+        it('should preserve default values when env vars not set', () => {
+            class DefaultConfig {
+                timeout: number = 5000;
+                retries: number = 3;
+                enabled: boolean = true;
+            }
+
+            // Only set one env var
+            process.env.TEST_TIMEOUT = '10000';
+
+            const config = AutoEnv.createFrom(DefaultConfig, 'TEST');
+
+            expect(config).toBeInstanceOf(DefaultConfig);
+            expect(config.timeout).toBe(10000); // From env
+            expect(config.retries).toBe(3);     // Default preserved
+            expect(config.enabled).toBe(true);  // Default preserved
+
+            // Cleanup
+            delete process.env.TEST_TIMEOUT;
+        });
+
+        it('should work with classes having methods', () => {
+            class ConfigWithMethods {
+                host: string = 'localhost';
+                port: number = 5432;
+
+                getConnectionString(): string {
+                    return `${this.host}:${this.port}`;
+                }
+            }
+
+            process.env.APP_HOST = 'example.com';
+            process.env.APP_PORT = '3306';
+
+            const config = AutoEnv.createFrom(ConfigWithMethods, 'APP');
+
+            expect(config).toBeInstanceOf(ConfigWithMethods);
+            expect(config.host).toBe('example.com');
+            expect(config.port).toBe(3306);
+            expect(config.getConnectionString()).toBe('example.com:3306');
+
+            // Cleanup
+            delete process.env.APP_HOST;
+            delete process.env.APP_PORT;
+        });
+    });
+
     describe('Type coercion methods', () => {
         describe('parseBoolean()', () => {
             it('should parse truthy values correctly', () => {
