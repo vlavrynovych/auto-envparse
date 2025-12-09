@@ -160,5 +160,47 @@ describe('Index Exports', () => {
             expect(config.host).toBe('db.example.com');
             expect(config.port).toBe(5433);
         });
+
+        it('should work without prefix using default export', () => {
+            const config = {
+                host: 'localhost',
+                port: 3000,
+                debug: false
+            };
+
+            process.env.HOST = 'no-prefix.example.com';
+            process.env.PORT = '8080';
+            process.env.DEBUG = 'true';
+
+            autoEnv(config); // No prefix
+
+            expect(config.host).toBe('no-prefix.example.com');
+            expect(config.port).toBe(8080);
+            expect(config.debug).toBe(true);
+
+            // Cleanup
+            delete process.env.HOST;
+            delete process.env.PORT;
+            delete process.env.DEBUG;
+        });
+
+        it('should work without prefix using parse alias', () => {
+            const config = {
+                maxRetries: 3,
+                timeout: 5000
+            };
+
+            process.env.MAX_RETRIES = '10';
+            process.env.TIMEOUT = '30000';
+
+            parse(config); // No prefix
+
+            expect(config.maxRetries).toBe(10);
+            expect(config.timeout).toBe(30000);
+
+            // Cleanup
+            delete process.env.MAX_RETRIES;
+            delete process.env.TIMEOUT;
+        });
     });
 });

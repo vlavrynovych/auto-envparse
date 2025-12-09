@@ -14,7 +14,7 @@ import { AutoEnv } from './autoEnv';
  * naming convention and type coercion.
  *
  * @param target - Object to populate from environment variables
- * @param prefix - Environment variable prefix (e.g., 'DB', 'APP', 'REDIS')
+ * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
  * @param overrides - Optional custom parsers for specific properties
  *
  * @example
@@ -27,14 +27,18 @@ import { AutoEnv } from './autoEnv';
  *     ssl: false
  * };
  *
- * // Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
+ * // With prefix - Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
  * autoEnv(config, 'DB');
+ * // config is now: { host: 'example.com', port: 3306, ssl: true }
+ *
+ * // Without prefix - Environment: HOST=example.com, PORT=3306, SSL=true
+ * autoEnv(config);
  * // config is now: { host: 'example.com', port: 3306, ssl: true }
  * ```
  */
 export default function autoEnv<T extends object>(
     target: T,
-    prefix: string,
+    prefix?: string,
     overrides?: Map<string, (target: T, envVarName: string) => void>
 ): void {
     AutoEnv.parse(target, prefix, overrides);

@@ -2,7 +2,7 @@
 
 Automatic environment variable parsing with zero configuration and type inference.
 
-[![npm version](https://badge.fury.io/js/auto-envparse.svg)](https://www.npmjs.com/package/auto-envparse)
+[![NPM Version][npm-image]][npm-url]
 [![Test](https://github.com/vlavrynovych/auto-envparse/actions/workflows/test.yml/badge.svg)](https://github.com/vlavrynovych/auto-envparse/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -67,7 +67,7 @@ const config = {
     debug: false
 };
 
-// Environment variables: APP_API_URL, APP_TIMEOUT, APP_DEBUG
+// With prefix - Environment variables: APP_API_URL, APP_TIMEOUT, APP_DEBUG
 autoEnv(config, 'APP');
 ```
 
@@ -78,6 +78,28 @@ import { parse } from 'auto-envparse';
 
 parse(config, 'APP');
 ```
+
+### Without Prefix
+
+The prefix parameter is optional. Omit it to use environment variables without a prefix:
+
+```typescript
+const config = {
+    host: 'localhost',
+    port: 3000,
+    nodeEnv: 'development'
+};
+
+// Environment variables: HOST, PORT, NODE_ENV
+autoEnv(config);
+// or
+parse(config);
+```
+
+This is useful for:
+- Simple configurations without namespace conflicts
+- Global environment variables like `NODE_ENV`, `PORT`, `HOST`
+- Single-service applications where prefixes add unnecessary verbosity
 
 ### Nested Objects
 
@@ -390,7 +412,10 @@ MIT © [Volodymyr Lavrynovych](https://github.com/vlavrynovych)
 
 ## Links
 
-- [GitHub Repository](https://github.com/vlavrynovych/auto-env)
-- [npm Package](https://www.npmjs.com/package/auto-env)
-- [Issue Tracker](https://github.com/vlavrynovych/auto-env/issues)
+- [GitHub Repository](https://github.com/vlavrynovych/auto-envparse)
+- [npm Package](https://www.npmjs.com/package/auto-envparse)
+- [Issue Tracker](https://github.com/vlavrynovych/auto-envparse/issues)
 - [API Documentation](./API.md)
+
+[npm-image]: https://img.shields.io/npm/v/auto-envparse.svg?style=flat
+[npm-url]: https://npmjs.org/package/auto-envparse

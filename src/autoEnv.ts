@@ -39,7 +39,7 @@ export class AutoEnv {
      * based on naming convention and type coercion.
      *
      * @param target - Object to populate from environment variables
-     * @param prefix - Environment variable prefix (e.g., 'DB', 'APP', 'REDIS')
+     * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
      * @param overrides - Optional custom parsers for specific properties
      *
      * @example
@@ -51,14 +51,18 @@ export class AutoEnv {
      *     poolSize: 10
      * };
      *
-     * // Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
+     * // With prefix - Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
      * AutoEnv.parse(config, 'DB');
+     * // Result: { host: 'example.com', port: 3306, ssl: true, poolSize: 10 }
+     *
+     * // Without prefix - Environment: HOST=example.com, PORT=3306, SSL=true
+     * AutoEnv.parse(config);
      * // Result: { host: 'example.com', port: 3306, ssl: true, poolSize: 10 }
      * ```
      */
     static parse<T extends object>(
         target: T,
-        prefix: string,
+        prefix: string = '',
         overrides?: Map<string, (target: T, envVarName: string) => void>
     ): void {
         for (const key in target) {
@@ -68,13 +72,13 @@ export class AutoEnv {
 
             // Check if there's a custom override for this property
             if (overrides?.has(key)) {
-                const envVarName = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
+                const envVarName = this.buildEnvVarName(prefix, key);
                 overrides.get(key)!(target, envVarName);
                 continue;
             }
 
             const value = target[key];
-            const envVarName = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
+            const envVarName = this.buildEnvVarName(prefix, key);
 
             // Handle different types
             if (value === null || value === undefined) {
@@ -93,6 +97,18 @@ export class AutoEnv {
                 this.applyPrimitive(target, key, envVarName);
             }
         }
+    }
+
+    /**
+     * Build environment variable name from prefix and property key.
+     *
+     * @param prefix - Optional prefix (empty string if not provided)
+     * @param key - Property key
+     * @returns Environment variable name (e.g., 'DB_HOST' or 'HOST')
+     */
+    private static buildEnvVarName(prefix: string, key: string): string {
+        const snakeKey = this.toSnakeCase(key).toUpperCase();
+        return prefix ? `${prefix}_${snakeKey}` : snakeKey;
     }
 
     /**
@@ -220,7 +236,8 @@ export class AutoEnv {
                 if (!Object.prototype.hasOwnProperty.call(value, nestedKey)) {
                     continue;
                 }
-                const nestedEnvKey = `${envVarName}_${this.toSnakeCase(nestedKey).toUpperCase()}`;
+                const snakeNestedKey = this.toSnakeCase(nestedKey).toUpperCase();
+                const nestedEnvKey = envVarName ? `${envVarName}_${snakeNestedKey}` : snakeNestedKey;
                 const nestedValue = process.env[nestedEnvKey];
                 if (nestedValue !== undefined && nestedValue !== '') {
                     const nestedType = typeof value[nestedKey];
@@ -233,17 +250,25 @@ export class AutoEnv {
     /**
      * Load a nested object from dot-notation environment variables.
      *
-     * Looks for environment variables with the pattern: PREFIX_KEY=value
+     * Looks for environment variables with the pattern: PREFIX_KEY=value or KEY=value (if no prefix)
      * Automatically coerces types based on default value types.
      *
-     * @param prefix - Prefix for environment variables (e.g., 'APP_LOGGING')
+     * @param prefix - Optional prefix for environment variables (e.g., 'APP_LOGGING'). Defaults to empty string.
      * @param defaultValue - Default object structure with types
      * @returns Object built from env vars or default value
      *
      * @example
      * ```typescript
-     * // Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
+     * // With prefix - Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
      * const config = AutoEnv.loadNestedFromEnv('APP_LOGGING', {
+     *     enabled: false,
+     *     path: './logs',
+     *     maxFiles: 10
+     * });
+     * // Result: { enabled: true, path: './logs', maxFiles: 20 }
+     *
+     * // Without prefix - Environment: ENABLED=true, MAX_FILES=20
+     * const config = AutoEnv.loadNestedFromEnv('', {
      *     enabled: false,
      *     path: './logs',
      *     maxFiles: 10
@@ -253,7 +278,7 @@ export class AutoEnv {
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     static loadNestedFromEnv<T extends Record<string, any>>(
-        prefix: string,
+        prefix: string = '',
         defaultValue: T
     ): T {
         const result = { ...defaultValue };
@@ -264,7 +289,7 @@ export class AutoEnv {
             }
 
             // Convert camelCase to SNAKE_CASE for env var name
-            const envKey = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
+            const envKey = this.buildEnvVarName(prefix, key);
             const envValue = process.env[envKey];
 
             if (envValue !== undefined && envValue !== '') {

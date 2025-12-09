@@ -277,6 +277,212 @@ describe('AutoEnv - Standalone Usage', () => {
         });
     });
 
+    describe('Optional prefix support', () => {
+        it('should parse environment variables without prefix', () => {
+            const config = {
+                host: 'localhost',
+                port: 5432,
+                ssl: false
+            };
+
+            process.env.HOST = 'example.com';
+            process.env.PORT = '3306';
+            process.env.SSL = 'true';
+
+            AutoEnv.parse(config);
+
+            expect(config.host).toBe('example.com');
+            expect(config.port).toBe(3306);
+            expect(config.ssl).toBe(true);
+
+            // Cleanup
+            delete process.env.HOST;
+            delete process.env.PORT;
+            delete process.env.SSL;
+        });
+
+        it('should parse nested objects without prefix', () => {
+            const config = {
+                database: {
+                    host: 'localhost',
+                    port: 5432
+                }
+            };
+
+            process.env.DATABASE_HOST = 'remote.example.com';
+            process.env.DATABASE_PORT = '3307';
+
+            AutoEnv.parse(config);
+
+            expect(config.database.host).toBe('remote.example.com');
+            expect(config.database.port).toBe(3307);
+
+            // Cleanup
+            delete process.env.DATABASE_HOST;
+            delete process.env.DATABASE_PORT;
+        });
+
+        it('should support custom overrides without prefix', () => {
+            const config = {
+                port: 5432,
+                environment: 'development'
+            };
+
+            const overrides = new Map();
+            overrides.set('port', (obj: typeof config, envVar: string) => {
+                const value = process.env[envVar];
+                if (value) {
+                    const port = parseInt(value, 10);
+                    if (port >= 1 && port <= 65535) {
+                        obj.port = port;
+                    }
+                }
+            });
+
+            process.env.PORT = '8080';
+            process.env.ENVIRONMENT = 'production';
+
+            AutoEnv.parse(config, '', overrides);
+
+            expect(config.port).toBe(8080);
+            expect(config.environment).toBe('production');
+
+            // Cleanup
+            delete process.env.PORT;
+            delete process.env.ENVIRONMENT;
+        });
+
+        it('should work with loadNestedFromEnv without prefix', () => {
+            process.env.ENABLED = 'true';
+            process.env.PATH = './custom/path';
+            process.env.MAX_FILES = '50';
+
+            const result = AutoEnv.loadNestedFromEnv('', {
+                enabled: false,
+                path: './default',
+                maxFiles: 10
+            });
+
+            expect(result).toEqual({
+                enabled: true,
+                path: './custom/path',
+                maxFiles: 50
+            });
+
+            // Cleanup
+            delete process.env.ENABLED;
+            delete process.env.PATH;
+            delete process.env.MAX_FILES;
+        });
+
+        it('should handle camelCase properties without prefix', () => {
+            const config = {
+                maxRetries: 3,
+                connectionTimeout: 5000,
+                apiKey: ''
+            };
+
+            process.env.MAX_RETRIES = '10';
+            process.env.CONNECTION_TIMEOUT = '30000';
+            process.env.API_KEY = 'secret-key-123';
+
+            AutoEnv.parse(config);
+
+            expect(config.maxRetries).toBe(10);
+            expect(config.connectionTimeout).toBe(30000);
+            expect(config.apiKey).toBe('secret-key-123');
+
+            // Cleanup
+            delete process.env.MAX_RETRIES;
+            delete process.env.CONNECTION_TIMEOUT;
+            delete process.env.API_KEY;
+        });
+
+        it('should handle complex objects (class instances) without prefix', () => {
+            // Create a class instance (complex object)
+            class DatabaseConfig {
+                host: string = 'localhost';
+                port: number = 5432;
+                timeout: number = 5000;
+            }
+
+            const dbInstance = new DatabaseConfig();
+            const config = {
+                database: dbInstance
+            };
+
+            // Set env vars without prefix for complex object properties
+            process.env.DATABASE_HOST = 'complex-host.example.com';
+            process.env.DATABASE_PORT = '3307';
+            process.env.DATABASE_TIMEOUT = '10000';
+
+            AutoEnv.parse(config, ''); // Explicit empty prefix
+
+            // Should use dot-notation for complex object
+            expect(config.database.host).toBe('complex-host.example.com');
+            expect(config.database.port).toBe(3307);
+            expect(config.database.timeout).toBe(10000);
+
+            // Cleanup
+            delete process.env.DATABASE_HOST;
+            delete process.env.DATABASE_PORT;
+            delete process.env.DATABASE_TIMEOUT;
+        });
+
+        it('should handle complex objects at root level without prefix', () => {
+            // Test with class instance directly
+            class AppConfig {
+                port: number = 3000;
+                debug: boolean = false;
+            }
+
+            const appInstance = new AppConfig();
+            const config = {
+                app: appInstance
+            };
+
+            // Set env vars without any prefix
+            process.env.APP_PORT = '8080';
+            process.env.APP_DEBUG = 'true';
+
+            AutoEnv.parse(config, ''); // Empty string prefix
+
+            expect(config.app.port).toBe(8080);
+            expect(config.app.debug).toBe(true);
+
+            // Cleanup
+            delete process.env.APP_PORT;
+            delete process.env.APP_DEBUG;
+        });
+
+        it('should handle complex object with empty string property name', () => {
+            // Edge case: property with empty string as key
+            class NestedConfig {
+                value: number = 100;
+                name: string = 'default';
+            }
+
+            const nestedInstance = new NestedConfig();
+            const config: Record<string, NestedConfig> = {
+                '': nestedInstance  // Empty string as property name
+            };
+
+            // When prefix is empty and key is empty, envVarName becomes empty
+            // So nested properties should be accessed directly
+            process.env.VALUE = '200';
+            process.env.NAME = 'custom';
+
+            AutoEnv.parse(config, ''); // Empty prefix
+
+            expect(config[''].value).toBe(200);
+            expect(config[''].name).toBe('custom');
+
+            // Cleanup
+            delete process.env.VALUE;
+            delete process.env.NAME;
+        });
+    });
+
     describe('Type coercion methods', () => {
         describe('parseBoolean()', () => {
             it('should parse truthy values correctly', () => {

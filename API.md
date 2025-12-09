@@ -21,7 +21,7 @@ The main entry point for auto-envparse.
 ```typescript
 function autoEnv<T extends object>(
     target: T,
-    prefix: string,
+    prefix?: string,
     overrides?: Map<string, (target: T, envVarName: string) => void>
 ): void
 ```
@@ -33,10 +33,12 @@ function autoEnv<T extends object>(
   - Modified in-place
   - Type: Any object with properties
 
-- **prefix**: `string`
+- **prefix**: `string` *(optional)*
   - Environment variable prefix (e.g., `'DB'`, `'APP'`, `'REDIS'`)
   - Used to generate env var names: `PREFIX_PROPERTY_NAME`
   - Case-insensitive (will be uppercased automatically)
+  - **Default**: `''` (empty string - no prefix)
+  - When omitted, environment variables are used without a prefix (e.g., `HOST`, `PORT`)
 
 - **overrides**: `Map<string, (target: T, envVarName: string) => void>` *(optional)*
   - Custom parsers for specific properties
@@ -49,7 +51,7 @@ function autoEnv<T extends object>(
 
 `void` - The function modifies the target object in-place.
 
-### Example
+### Example with Prefix
 
 ```typescript
 import autoEnv from 'auto-envparse';
@@ -68,6 +70,28 @@ console.log(config);
 //   host: 'example.com',
 //   port: 3306,
 //   ssl: true
+// }
+```
+
+### Example without Prefix
+
+```typescript
+import autoEnv from 'auto-envparse';
+
+const config = {
+    host: 'localhost',
+    port: 3000,
+    nodeEnv: 'development'
+};
+
+// Environment: HOST=production.com, PORT=8080, NODE_ENV=production
+autoEnv(config);
+
+console.log(config);
+// {
+//   host: 'production.com',
+//   port: 8080,
+//   nodeEnv: 'production'
 // }
 ```
 
@@ -108,8 +132,13 @@ Alias for the default `autoEnv` function. Useful if you prefer the `parse` namin
 ```typescript
 import { parse } from 'auto-envparse';
 
+// With prefix
 const config = { host: 'localhost', port: 5432 };
 parse(config, 'DB');
+
+// Without prefix
+const globalConfig = { nodeEnv: 'development', port: 3000 };
+parse(globalConfig);
 ```
 
 **Note:** `parse` and `autoEnv` are the same function. Use whichever name you prefer.
@@ -128,7 +157,7 @@ Same as the default export `autoEnv()` function.
 class AutoEnv {
     static parse<T extends object>(
         target: T,
-        prefix: string,
+        prefix?: string,
         overrides?: Map<string, (target: T, envVarName: string) => void>
     ): void;
 }
@@ -139,8 +168,13 @@ class AutoEnv {
 ```typescript
 import { AutoEnv } from 'auto-envparse';
 
+// With prefix
 const config = { host: 'localhost', port: 5432 };
 AutoEnv.parse(config, 'DB');
+
+// Without prefix
+const simpleConfig = { host: 'localhost', port: 3000 };
+AutoEnv.parse(simpleConfig);
 ```
 
 ---
@@ -152,7 +186,7 @@ Load a nested object from dot-notation environment variables.
 ```typescript
 class AutoEnv {
     static loadNestedFromEnv<T extends Record<string, any>>(
-        prefix: string,
+        prefix?: string,
         defaultValue: T
     ): T;
 }
@@ -160,9 +194,11 @@ class AutoEnv {
 
 **Parameters:**
 
-- **prefix**: `string`
+- **prefix**: `string` *(optional)*
   - Environment variable prefix (e.g., `'APP_LOGGING'`)
   - Used to look for env vars: `PREFIX_KEY`
+  - **Default**: `''` (empty string - no prefix)
+  - When omitted, looks for env vars without prefix
 
 - **defaultValue**: `T extends Record<string, any>`
   - Default object with property types
@@ -172,7 +208,7 @@ class AutoEnv {
 
 `T` - New object with values from environment variables or defaults
 
-**Example:**
+**Example with Prefix:**
 
 ```typescript
 import { AutoEnv } from 'auto-envparse';
@@ -189,6 +225,26 @@ console.log(loggingConfig);
 //   enabled: true,
 //   path: './logs',
 //   maxFiles: 20
+// }
+```
+
+**Example without Prefix:**
+
+```typescript
+import { AutoEnv } from 'auto-envparse';
+
+// Environment: ENABLED=true, MAX_CONNECTIONS=50
+const serverConfig = AutoEnv.loadNestedFromEnv('', {
+    enabled: false,
+    maxConnections: 10,
+    timeout: 5000
+});
+
+console.log(serverConfig);
+// {
+//   enabled: true,
+//   maxConnections: 50,
+//   timeout: 5000
 // }
 ```
 
