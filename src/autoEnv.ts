@@ -1,0 +1,342 @@
+/**
+ * Utility class for parsing environment variables and applying them to configuration objects.
+ *
+ * Provides automatic environment variable discovery and type coercion based on object structure.
+ *
+ * **Features:**
+ * - Automatic type detection (primitives, arrays, objects)
+ * - CamelCase to SNAKE_CASE conversion
+ * - Type coercion (string, number, boolean)
+ * - Nested object support with dot-notation
+ * - Override system for custom parsing
+ *
+ * @example
+ * ```typescript
+ * // Simple usage
+ * const config = { host: 'localhost', port: 5432, ssl: false };
+ * AutoEnv.parse(config, 'DB');
+ * // Applies: DB_HOST, DB_PORT, DB_SSL
+ *
+ * // With overrides
+ * const overrides = new Map();
+ * overrides.set('port', (obj, envVar) => {
+ *     const value = process.env[envVar];
+ *     if (value) {
+ *         const port = parseInt(value, 10);
+ *         if (port >= 1 && port <= 65535) {
+ *             obj.port = port;
+ *         }
+ *     }
+ * });
+ * AutoEnv.parse(config, 'DB', overrides);
+ * ```
+ */
+export class AutoEnv {
+    /**
+     * Parse environment variables and apply them to the target object.
+     *
+     * Uses reflection to discover properties and automatically applies environment variables
+     * based on naming convention and type coercion.
+     *
+     * @param target - Object to populate from environment variables
+     * @param prefix - Environment variable prefix (e.g., 'DB', 'APP', 'REDIS')
+     * @param overrides - Optional custom parsers for specific properties
+     *
+     * @example
+     * ```typescript
+     * const config = {
+     *     host: 'localhost',
+     *     port: 5432,
+     *     ssl: false,
+     *     poolSize: 10
+     * };
+     *
+     * // Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
+     * AutoEnv.parse(config, 'DB');
+     * // Result: { host: 'example.com', port: 3306, ssl: true, poolSize: 10 }
+     * ```
+     */
+    static parse<T extends object>(
+        target: T,
+        prefix: string,
+        overrides?: Map<string, (target: T, envVarName: string) => void>
+    ): void {
+        for (const key in target) {
+            if (!Object.prototype.hasOwnProperty.call(target, key)) {
+                continue;
+            }
+
+            // Check if there's a custom override for this property
+            if (overrides?.has(key)) {
+                const envVarName = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
+                overrides.get(key)!(target, envVarName);
+                continue;
+            }
+
+            const value = target[key];
+            const envVarName = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
+
+            // Handle different types
+            if (value === null || value === undefined) {
+                // For null/undefined, try to load as string if env var exists
+                this.applyPrimitive(target, key, envVarName);
+            } else if (Array.isArray(value)) {
+                this.applyArray(target, key, envVarName);
+            } else if (typeof value === 'object' && value.constructor === Object) {
+                // Plain object - use nested parsing
+                this.applyNestedObject(target, key, envVarName);
+            } else if (typeof value === 'object') {
+                // Complex object (class instance)
+                this.applyComplexObject(target, key, envVarName, value);
+            } else {
+                // Primitives (string, number, boolean)
+                this.applyPrimitive(target, key, envVarName);
+            }
+        }
+    }
+
+    /**
+     * Apply primitive value from environment variable.
+     *
+     * Handles string, number, and boolean types with automatic type coercion.
+     *
+     * @param target - Target object
+     * @param key - Property key
+     * @param envVarName - Environment variable name
+     */
+    private static applyPrimitive<T extends object, K extends keyof T>(
+        target: T,
+        key: K,
+        envVarName: string
+    ): void {
+        const envValue = process.env[envVarName];
+        if (envValue !== undefined) {
+            const currentValue = target[key];
+            const valueType = currentValue === null || currentValue === undefined
+                ? 'string'
+                : typeof currentValue;
+            target[key] = this.coerceValue(envValue, valueType) as T[K];
+        }
+    }
+
+    /**
+     * Apply array value from environment variable (expects JSON format).
+     *
+     * Handles special cases like RegExp arrays.
+     *
+     * @param target - Target object
+     * @param key - Property key
+     * @param envVarName - Environment variable name
+     */
+    private static applyArray<T extends object, K extends keyof T>(
+        target: T,
+        key: K,
+        envVarName: string
+    ): void {
+        const envValue = process.env[envVarName];
+        if (envValue) {
+            try {
+                const parsed = JSON.parse(envValue);
+                if (Array.isArray(parsed)) {
+                    // Handle special cases (like RegExp arrays)
+                    const currentArray = target[key];
+                    if (Array.isArray(currentArray) && currentArray.length > 0 && currentArray[0] instanceof RegExp) {
+                        target[key] = parsed.map(p => new RegExp(p)) as T[K];
+                    } else {
+                        target[key] = parsed as T[K];
+                    }
+                }
+            } catch {
+                console.warn(`Warning: Invalid ${envVarName} format. Expected JSON array.`);
+            }
+        }
+    }
+
+    /**
+     * Apply nested object from environment variable.
+     *
+     * Tries JSON parsing first, then falls back to dot-notation env vars.
+     * Dot-notation takes precedence over JSON for individual properties.
+     *
+     * @param target - Target object
+     * @param key - Property key
+     * @param envVarName - Environment variable name
+     */
+    private static applyNestedObject<T extends object, K extends keyof T>(
+        target: T,
+        key: K,
+        envVarName: string
+    ): void {
+        const value = target[key];
+        if (typeof value === 'object' && value !== null) {
+            // Try JSON first
+            const envValue = process.env[envVarName];
+            if (envValue) {
+                try {
+                    const parsed = JSON.parse(envValue);
+                    Object.assign(value, parsed);
+                } catch {
+                    console.warn(`Warning: Invalid ${envVarName} JSON. Using dot-notation if available.`);
+                }
+            }
+            // Then apply dot-notation (takes precedence)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            target[key] = this.loadNestedFromEnv(envVarName, value as any) as T[K];
+        }
+    }
+
+    /**
+     * Apply complex object from environment variable.
+     *
+     * Handles objects like class instances with their own structure.
+     * Tries JSON parsing first, then recursively applies dot-notation for nested properties.
+     *
+     * @param target - Target object
+     * @param key - Property key
+     * @param envVarName - Environment variable name
+     * @param value - Current property value
+     */
+    private static applyComplexObject<T extends object, K extends keyof T>(
+        target: T,
+        key: K,
+        envVarName: string,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        value: any
+    ): void {
+        // Try JSON first
+        const envValue = process.env[envVarName];
+        if (envValue) {
+            try {
+                const parsed = JSON.parse(envValue);
+                Object.assign(value, parsed);
+            } catch {
+                console.warn(`Warning: Invalid ${envVarName} JSON. Using dot-notation if available.`);
+            }
+        }
+
+        // Recursively apply dot-notation for nested properties
+        if (typeof value === 'object' && value !== null) {
+            for (const nestedKey in value) {
+                if (!Object.prototype.hasOwnProperty.call(value, nestedKey)) {
+                    continue;
+                }
+                const nestedEnvKey = `${envVarName}_${this.toSnakeCase(nestedKey).toUpperCase()}`;
+                const nestedValue = process.env[nestedEnvKey];
+                if (nestedValue !== undefined && nestedValue !== '') {
+                    const nestedType = typeof value[nestedKey];
+                    value[nestedKey] = this.coerceValue(nestedValue, nestedType);
+                }
+            }
+        }
+    }
+
+    /**
+     * Load a nested object from dot-notation environment variables.
+     *
+     * Looks for environment variables with the pattern: PREFIX_KEY=value
+     * Automatically coerces types based on default value types.
+     *
+     * @param prefix - Prefix for environment variables (e.g., 'APP_LOGGING')
+     * @param defaultValue - Default object structure with types
+     * @returns Object built from env vars or default value
+     *
+     * @example
+     * ```typescript
+     * // Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
+     * const config = AutoEnv.loadNestedFromEnv('APP_LOGGING', {
+     *     enabled: false,
+     *     path: './logs',
+     *     maxFiles: 10
+     * });
+     * // Result: { enabled: true, path: './logs', maxFiles: 20 }
+     * ```
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    static loadNestedFromEnv<T extends Record<string, any>>(
+        prefix: string,
+        defaultValue: T
+    ): T {
+        const result = { ...defaultValue };
+
+        for (const key in defaultValue) {
+            if (!Object.prototype.hasOwnProperty.call(defaultValue, key)) {
+                continue;
+            }
+
+            // Convert camelCase to SNAKE_CASE for env var name
+            const envKey = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
+            const envValue = process.env[envKey];
+
+            if (envValue !== undefined && envValue !== '') {
+                const defaultType = typeof defaultValue[key];
+                result[key] = this.coerceValue(envValue, defaultType) as T[Extract<keyof T, string>];
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Coerce a string value to the specified type.
+     *
+     * @param value - String value from environment variable
+     * @param type - Target type ('boolean', 'number', 'string')
+     * @returns Coerced value
+     */
+    static coerceValue(value: string, type: string): string | number | boolean {
+        switch (type) {
+            case 'boolean':
+                return this.parseBoolean(value);
+            case 'number':
+                return this.parseNumber(value);
+            case 'string':
+            default:
+                return value;
+        }
+    }
+
+    /**
+     * Parse a string to boolean.
+     *
+     * Truthy values: 'true', '1', 'yes', 'on' (case-insensitive)
+     * Everything else is false.
+     *
+     * @param value - String value
+     * @returns Boolean value
+     */
+    static parseBoolean(value: string): boolean {
+        const normalized = value.toLowerCase().trim();
+        return ['true', '1', 'yes', 'on'].includes(normalized);
+    }
+
+    /**
+     * Parse a string to number.
+     *
+     * @param value - String value
+     * @returns Parsed number or NaN if invalid
+     */
+    static parseNumber(value: string): number {
+        const parsed = parseFloat(value);
+        if (isNaN(parsed)) {
+            console.warn(`Warning: Invalid number value "${value}", using NaN`);
+        }
+        return parsed;
+    }
+
+    /**
+     * Convert camelCase to snake_case.
+     *
+     * @param str - camelCase string
+     * @returns snake_case string
+     *
+     * @example
+     * ```typescript
+     * AutoEnv.toSnakeCase('poolSize');     // 'pool_size'
+     * AutoEnv.toSnakeCase('maxRetries');   // 'max_retries'
+     * AutoEnv.toSnakeCase('host');         // 'host'
+     * ```
+     */
+    static toSnakeCase(str: string): string {
+        return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+    }
+}
