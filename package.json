@@ -1,6 +1,7 @@
 {
   "name": "auto-envparse",
   "version": "1.0.0",
+  "type": "module",
   "description": "Automatic environment variable parsing with zero configuration and type inference",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -22,8 +23,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint src test --ext .ts",
-    "lint:fix": "eslint src test --ext .ts --fix",
+    "lint": "eslint src test",
+    "lint:fix": "eslint src test --fix",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build && npm test",
     "prepare": "husky install"
@@ -59,11 +60,13 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitest/coverage-v8": "^4.0.15",
-    "eslint": "^8.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
     "husky": "^9.1.7",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
