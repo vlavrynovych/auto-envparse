@@ -58,7 +58,7 @@ export class AutoEnv {
      */
     static parse<T extends object>(
         target: T,
-        prefix: string,
+        prefix: string = '',
         overrides?: Map<string, (target: T, envVarName: string) => void>
     ): void {
         for (const key in target) {
@@ -68,13 +68,13 @@ export class AutoEnv {
 
             // Check if there's a custom override for this property
             if (overrides?.has(key)) {
-                const envVarName = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
+                const envVarName = this.buildEnvVarName(prefix, key);
                 overrides.get(key)!(target, envVarName);
                 continue;
             }
 
             const value = target[key];
-            const envVarName = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
+            const envVarName = this.buildEnvVarName(prefix, key);
 
             // Handle different types
             if (value === null || value === undefined) {
@@ -93,6 +93,53 @@ export class AutoEnv {
                 this.applyPrimitive(target, key, envVarName);
             }
         }
+    }
+
+    /**
+     * Create and populate an instance from a class constructor.
+     *
+     * @param classConstructor - Class constructor function with default values
+     * @param prefix - Optional environment variable prefix. Defaults to empty string.
+     * @param overrides - Optional custom parsers for specific properties
+     * @returns New instance of the class populated from environment variables
+     *
+     * @example
+     * ```typescript
+     * class DatabaseConfig {
+     *     host = 'localhost';
+     *     port = 5432;
+     *     ssl = false;
+     * }
+     *
+     * const config = AutoEnv.createFrom(DatabaseConfig, 'DB');
+     * ```
+     */
+    static createFrom<T extends { new(): object }>(
+        classConstructor: T,
+        prefix?: string,
+        overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
+    ): InstanceType<T> {
+        const instance = new classConstructor() as InstanceType<T>;
+        this.parse(instance, prefix, overrides);
+        return instance;
+    }
+
+    /**
+     * Build environment variable name from prefix and property key.
+     *
+     * @param prefix - Environment variable prefix (can be empty string)
+     * @param key - Property key in camelCase
+     * @returns Environment variable name in UPPER_SNAKE_CASE
+     *
+     * @example
+     * ```typescript
+     * buildEnvVarName('DB', 'poolSize')  // 'DB_POOL_SIZE'
+     * buildEnvVarName('', 'poolSize')    // 'POOL_SIZE'
+     * ```
+     */
+    private static buildEnvVarName(prefix: string, key: string): string {
+        const snakeKey = this.toSnakeCase(key).toUpperCase();
+        return prefix ? `${prefix}_${snakeKey}` : snakeKey;
     }
 
     /**
