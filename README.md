@@ -1,65 +1,96 @@
 # auto-envparse
 
-Automatic environment variable parsing with zero configuration and type inference.
+> Automatic environment variable parsing with zero configuration and type inference
 
-[![npm version](https://badge.fury.io/js/auto-envparse.svg)](https://www.npmjs.com/package/auto-envparse)
+[![NPM Version][npm-image]][npm-url]
 [![Test](https://github.com/vlavrynovych/auto-envparse/actions/workflows/test.yml/badge.svg)](https://github.com/vlavrynovych/auto-envparse/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Why auto-envparse?
+**Following [12-Factor App](https://12factor.net/config) principles** - Store configuration in the environment without schemas, validators, or manual type conversion. Your object structure **IS** your schema.
 
-Most environment variable libraries require you to define schemas, validators, or manual mapping code. **auto-envparse** takes a different approach: your object structure **IS** your schema.
+---
 
-Following [12-Factor App](https://12factor.net/config) principles, auto-envparse makes configuration through environment variables effortless and type-safe, allowing you to store config in the environment without complex setup.
+## 💡 Why auto-envparse?
+
+Most environment variable libraries force you to write schemas and validators before you can parse anything:
 
 ```typescript
-import autoEnv from 'auto-envparse';
+// ❌ Other libraries: Define schema + types + validators
+const schema = {
+  host: str({ default: 'localhost' }),
+  port: num({ default: 5432 }),
+  ssl: bool({ default: false })
+};
+const config = cleanEnv(process.env, schema);
+```
 
+**auto-envparse takes a different approach.** If you already have a configuration object with defaults, that's all you need:
+
+```typescript
+// ✅ auto-envparse: Your object IS the schema
 const config = {
     host: 'localhost',
     port: 5432,
-    ssl: false,
-    poolSize: 10
+    ssl: false
 };
 
-// Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true, DB_POOL_SIZE=20
-autoEnv(config, 'DB');
-
-console.log(config);
-// {
-//   host: 'example.com',
-//   port: 3306,        // Automatically converted to number
-//   ssl: true,         // Automatically converted to boolean
-//   poolSize: 20       // Automatically converted to number
-// }
+parseEnv(config, 'DB'); // Done!
 ```
 
-**No schemas. No validators. No manual mapping. Just works.**
+**The type of each default value tells auto-envparse how to parse it.** No schemas. No validators. No manual type conversion. Just works.
 
-## Features
+### Works with Classes Too
+
+```typescript
+import { createFrom } from 'auto-envparse';
+
+class DatabaseConfig {
+    host = 'localhost';
+    port = 5432;
+    ssl = false;
+}
+
+// Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
+const config = createFrom(DatabaseConfig, 'DB');
+// Returns a fully populated DatabaseConfig instance
+```
+
+Perfect for existing codebases with class-based configuration.
+
+---
+
+## 🎯 Features
 
 - ✨ **Zero Configuration** - Object structure defines the schema
 - 🎯 **Type Inference** - Automatic type detection from default values
-- 🔄 **Type Coercion** - String env vars → correct types (string, number, boolean)
-- 🐫 **Naming Convention** - Auto camelCase → SNAKE_CASE conversion
+- 🔄 **Type Coercion** - String env vars → correct types (string, number, boolean, array)
+- 🐫 **Smart Naming** - Auto camelCase → SNAKE_CASE conversion
 - 🏗️ **Nested Objects** - Full support with dot-notation (e.g., `DB_POOL_MIN`)
 - 🛠️ **Custom Overrides** - Add validation or custom parsing when needed
 - 📦 **Dual Package** - ESM and CommonJS support
 - 🎨 **TypeScript** - Full type safety included
 - 🪶 **Lightweight** - Zero dependencies
 
-## Installation
+---
+
+## 📦 Installation
 
 ```bash
 npm install auto-envparse
 ```
 
-## Quick Start
+```bash
+yarn add auto-envparse
+```
 
-### Basic Usage
+---
+
+## 🚀 Quick Start
+
+### 1. Basic Usage
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 const config = {
     apiUrl: 'http://localhost:3000',
@@ -68,54 +99,104 @@ const config = {
 };
 
 // Environment variables: APP_API_URL, APP_TIMEOUT, APP_DEBUG
-autoEnv(config, 'APP');
+parseEnv(config, 'APP');
+
+console.log(config.timeout); // Automatically converted to number
 ```
 
-You can also use the `parse` alias:
+**Alias available:** Use `parse()` if you prefer shorter names:
 
 ```typescript
 import { parse } from 'auto-envparse';
-
 parse(config, 'APP');
 ```
 
-### Nested Objects
+### 2. Without Prefix
+
+Prefix is optional - omit it for global environment variables:
+
+```typescript
+const config = {
+    host: 'localhost',
+    port: 3000,
+    nodeEnv: 'development'
+};
+
+// Environment variables: HOST, PORT, NODE_ENV
+parseEnv(config);
+```
+
+### 3. Nested Objects
 
 ```typescript
 const config = {
     database: {
         host: 'localhost',
         port: 5432,
-        ssl: false
-    },
-    redis: {
-        host: 'localhost',
-        port: 6379
+        pool: {
+            min: 2,
+            max: 10
+        }
     }
 };
 
 // Environment:
-// DB_DATABASE_HOST=prod-db.example.com
-// DB_DATABASE_PORT=5433
-// DB_DATABASE_SSL=true
-// DB_REDIS_HOST=prod-redis.example.com
-// DB_REDIS_PORT=6380
-autoEnv(config, 'DB');
+// APP_DATABASE_HOST=prod.com
+// APP_DATABASE_PORT=5433
+// APP_DATABASE_POOL_MIN=5
+// APP_DATABASE_POOL_MAX=20
+parseEnv(config, 'APP');
 ```
 
-### Custom Validation with Overrides
+### 4. Class-Based Configuration
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import { createFrom } from 'auto-envparse';
 
-const config = {
-    port: 3000,
-    environment: 'development'
-};
+class ServerConfig {
+    host = '0.0.0.0';
+    port = 3000;
 
+    getUrl(): string {
+        return `http://${this.host}:${this.port}`;
+    }
+}
+
+// Environment: SERVER_HOST=example.com, SERVER_PORT=8080
+const config = createFrom(ServerConfig, 'SERVER');
+console.log(config.getUrl()); // 'http://example.com:8080'
+```
+
+---
+
+## 📖 Type Coercion
+
+auto-envparse automatically converts environment variables based on your default value types:
+
+| Default Value | Env Var | Result | Type |
+|---------------|---------|--------|------|
+| `'localhost'` | `'prod.com'` | `'prod.com'` | `string` |
+| `5432` | `'3306'` | `3306` | `number` |
+| `false` | `'true'` | `true` | `boolean` |
+| `['a']` | `'["x","y"]'` | `['x', 'y']` | `array` |
+
+### Boolean Parsing
+
+Flexible boolean parsing (case-insensitive):
+
+- **Truthy**: `'true'`, `'1'`, `'yes'`, `'on'`
+- **Falsy**: Everything else
+
+---
+
+## 🛠️ Custom Validation
+
+Add validation when needed using overrides:
+
+```typescript
+const config = { port: 3000 };
 const overrides = new Map();
 
-// Custom validation for port
 overrides.set('port', (obj, envVar) => {
     const value = process.env[envVar];
     if (value) {
@@ -123,219 +204,82 @@ overrides.set('port', (obj, envVar) => {
         if (port >= 1 && port <= 65535) {
             obj.port = port;
         } else {
-            throw new Error(`Invalid port: ${port}`);
+            throw new Error(`Port must be 1-65535, got: ${port}`);
         }
     }
 });
 
-// Custom validation for environment
-overrides.set('environment', (obj, envVar) => {
-    const value = process.env[envVar];
-    if (value && ['development', 'staging', 'production'].includes(value)) {
-        obj.environment = value;
-    } else {
-        throw new Error(`Invalid environment: ${value}`);
-    }
-});
-
-autoEnv(config, 'APP', overrides);
+parseEnv(config, 'APP', overrides);
 ```
 
-## Type Coercion
+### Enum Validation
 
-auto-envparse automatically converts string environment variables to the correct type based on your default values:
-
-| Default Value | Env Var Value | Result | Type |
-|---------------|---------------|--------|------|
-| `'localhost'` | `'example.com'` | `'example.com'` | `string` |
-| `5432` | `'3306'` | `3306` | `number` |
-| `false` | `'true'` | `true` | `boolean` |
-| `null` | `'value'` | `'value'` | `string` |
-| `['a', 'b']` | `'["x","y"]'` | `['x', 'y']` | `array` |
-
-### Boolean Parsing
-
-Boolean values accept multiple formats (case-insensitive):
-
-- **Truthy**: `'true'`, `'1'`, `'yes'`, `'on'`
-- **Falsy**: Everything else (`'false'`, `'0'`, `'no'`, `'off'`, etc.)
-
-## Naming Convention
-
-auto-envparse automatically converts camelCase property names to SNAKE_CASE environment variables:
+For enum-like values, use the built-in `enumValidator` helper:
 
 ```typescript
+import parseEnv, { enumValidator } from 'auto-envparse';
+
+type Environment = 'development' | 'staging' | 'production';
+
 const config = {
-    apiKey: '',           // → APP_API_KEY
-    maxRetries: 3,        // → APP_MAX_RETRIES
-    connectionTimeout: 30 // → APP_CONNECTION_TIMEOUT
+    environment: 'development' as Environment,
+    logLevel: 'info'
 };
 
-autoEnv(config, 'APP');
+const overrides = new Map();
+
+// Validate environment is one of the allowed values
+overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
+
+// Case-insensitive enum validation
+overrides.set('logLevel', enumValidator('logLevel', ['debug', 'info', 'warn', 'error'], { caseSensitive: false }));
+
+parseEnv(config, 'APP', overrides);
+
+// ✅ Valid: APP_ENVIRONMENT=production
+// ❌ Invalid: APP_ENVIRONMENT=test (throws error)
+// ✅ Valid: APP_LOG_LEVEL=DEBUG (accepts any case)
 ```
 
-## Advanced Usage
+---
 
-### Using Individual Utility Functions
+## 📚 Documentation
 
-```typescript
-import { parseBoolean, parseNumber, toSnakeCase, coerceValue } from 'auto-envparse';
+### Getting Started
+- [Quick Start](#-quick-start) - Get up and running in 30 seconds
+- [Type Coercion](#-type-coercion) - How types are automatically converted
+- [Installation](#-installation) - npm and yarn instructions
 
-// Parse booleans
-parseBoolean('true');  // true
-parseBoolean('1');     // true
-parseBoolean('yes');   // true
+### Configuration
+- [Custom Validation](#-custom-validation) - Add validation rules
+- [Nested Objects](#3-nested-objects) - Working with deep structures
+- [Class-Based Config](#4-class-based-configuration) - Using with classes
 
-// Parse numbers
-parseNumber('42');     // 42
-parseNumber('3.14');   // 3.14
+### Reference
+- [API Documentation](./API.md) - Complete API reference
+- [CHANGELOG](./CHANGELOG.md) - Version history
 
-// Convert names
-toSnakeCase('poolSize');  // 'pool_size'
+---
 
-// Type coercion
-coerceValue('42', 'number');    // 42
-coerceValue('true', 'boolean'); // true
-coerceValue('hello', 'string'); // 'hello'
-```
-
-### Loading Nested Objects Separately
-
-```typescript
-import { loadNestedFromEnv } from 'auto-envparse';
-
-// Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
-const loggingConfig = loadNestedFromEnv('APP_LOGGING', {
-    enabled: false,
-    path: './logs',
-    maxFiles: 10
-});
-
-console.log(loggingConfig);
-// {
-//   enabled: true,
-//   path: './logs',
-//   maxFiles: 20
-// }
-```
-
-### Using the AutoEnv Class Directly
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-const config = { host: 'localhost', port: 5432 };
-AutoEnv.parse(config, 'DB');
-```
-
-## Real-World Examples
-
-### Database Configuration
-
-```typescript
-import autoEnv from 'auto-envparse';
-
-const dbConfig = {
-    host: 'localhost',
-    port: 5432,
-    database: 'myapp',
-    user: 'postgres',
-    password: '',
-    ssl: false,
-    pool: {
-        min: 2,
-        max: 10,
-        idleTimeoutMillis: 30000
-    }
-};
-
-autoEnv(dbConfig, 'DATABASE');
-
-// Supported env vars:
-// DATABASE_HOST
-// DATABASE_PORT
-// DATABASE_DATABASE
-// DATABASE_USER
-// DATABASE_PASSWORD
-// DATABASE_SSL
-// DATABASE_POOL_MIN
-// DATABASE_POOL_MAX
-// DATABASE_POOL_IDLE_TIMEOUT_MILLIS
-```
-
-### Application Configuration
-
-```typescript
-import autoEnv from 'auto-envparse';
-
-const appConfig = {
-    port: 3000,
-    host: '0.0.0.0',
-    nodeEnv: 'development',
-    cors: {
-        enabled: true,
-        origin: '*',
-        credentials: false
-    },
-    rateLimit: {
-        windowMs: 900000,
-        max: 100
-    },
-    logging: {
-        level: 'info',
-        format: 'json'
-    }
-};
-
-autoEnv(appConfig, 'APP');
-```
-
-### Microservices Configuration
-
-```typescript
-import autoEnv from 'auto-envparse';
-
-const services = {
-    auth: {
-        url: 'http://localhost:4001',
-        timeout: 5000
-    },
-    payment: {
-        url: 'http://localhost:4002',
-        timeout: 10000
-    },
-    notification: {
-        url: 'http://localhost:4003',
-        timeout: 3000
-    }
-};
-
-autoEnv(services, 'SERVICES');
-
-// Env vars:
-// SERVICES_AUTH_URL=https://auth.example.com
-// SERVICES_AUTH_TIMEOUT=5000
-// SERVICES_PAYMENT_URL=https://payment.example.com
-// ...
-```
-
-## Comparison with Other Libraries
+## 📊 Comparison with Other Libraries
 
 | Feature | auto-envparse | envalid | convict | dotenv |
-|---------|----------|---------|---------|--------|
+|---------|--------------|---------|---------|--------|
 | Zero config | ✅ | ❌ | ❌ | ✅ |
 | Type inference | ✅ | ❌ | ❌ | ❌ |
-| Automatic coercion | ✅ | ✅ | ✅ | ❌ |
+| Auto coercion | ✅ | ✅ | ✅ | ❌ |
 | Nested objects | ✅ | ❌ | ✅ | ❌ |
 | Custom validation | ✅ | ✅ | ✅ | ❌ |
 | TypeScript | ✅ | ✅ | ✅ | ✅ |
 | Dependencies | 0 | 1 | 2 | 0 |
 
-**auto-env** is the only library that uses reflection and type inference to eliminate schema definitions entirely.
+**auto-envparse** is the only library that uses reflection and type inference to eliminate schema definitions entirely.
 
-## TypeScript Support
+---
 
-auto-env is written in TypeScript and provides full type safety:
+## 🎨 TypeScript Support
+
+Full type safety with TypeScript:
 
 ```typescript
 interface Config {
@@ -350,47 +294,50 @@ const config: Config = {
     ssl: false
 };
 
-autoEnv(config, 'DB');
+parseEnv(config, 'DB');
 
-// config.host is typed as string
-// config.port is typed as number
-// config.ssl is typed as boolean
+// All types are preserved and enforced
+const host: string = config.host;
+const port: number = config.port;
+const ssl: boolean = config.ssl;
 ```
 
-## API Reference
+---
 
-For detailed API documentation, see [API.md](./API.md).
+## 🔧 How It Works
 
-## How It Works
+auto-envparse uses JavaScript reflection to eliminate configuration:
 
-auto-env uses JavaScript reflection to:
-
-1. **Discover properties** - Iterate through your object's own properties
-2. **Infer types** - Determine types from default values
-3. **Generate env var names** - Convert camelCase to PREFIX_SNAKE_CASE
-4. **Parse and coerce** - Read env vars and convert to correct types
-5. **Apply values** - Update object properties in-place
+1. **Discover** - Iterate through object's own properties
+2. **Infer** - Determine types from default values
+3. **Transform** - Convert camelCase to PREFIX_SNAKE_CASE
+4. **Parse** - Read env vars and coerce to correct types
+5. **Apply** - Update properties in-place
 
 No magic. No complex schemas. Just smart reflection.
 
-## Edge Cases and Limitations
+---
 
-- **Inherited properties** are skipped (only own properties are processed)
-- **Arrays** expect JSON format in env vars: `'["item1", "item2"]'`
-- **Complex objects** (class instances) are supported with dot-notation
-- **null/undefined** default values are treated as strings
-
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
+See [GitHub Issues](https://github.com/vlavrynovych/auto-envparse/issues) for open tasks and discussions.
+
+---
+
+## 📄 License
 
 MIT © [Volodymyr Lavrynovych](https://github.com/vlavrynovych)
 
-## Links
+---
 
-- [GitHub Repository](https://github.com/vlavrynovych/auto-env)
-- [npm Package](https://www.npmjs.com/package/auto-env)
-- [Issue Tracker](https://github.com/vlavrynovych/auto-env/issues)
-- [API Documentation](./API.md)
+## 🔗 Links
+
+- 📦 [npm Package](https://www.npmjs.com/package/auto-envparse)
+- 🐙 [GitHub Repository](https://github.com/vlavrynovych/auto-envparse)
+- 📖 [API Documentation](./API.md)
+- 🐛 [Issue Tracker](https://github.com/vlavrynovych/auto-envparse/issues)
+
+[npm-image]: https://img.shields.io/npm/v/auto-envparse.svg?style=flat
+[npm-url]: https://npmjs.org/package/auto-envparse

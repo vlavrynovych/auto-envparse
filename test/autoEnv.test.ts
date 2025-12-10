@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AutoEnv } from '../src/autoEnv';
 
 describe('AutoEnv - Standalone Usage', () => {
@@ -65,6 +65,25 @@ describe('AutoEnv - Standalone Usage', () => {
             expect(dbConfig.timeout).toBe(10000);
         });
 
+        it('should throw error for invalid prefix format', () => {
+            const config = { host: 'localhost' };
+
+            // Lowercase prefix should throw
+            expect(() => {
+                AutoEnv.parse(config, 'db');
+            }).toThrow(/Invalid prefix "db"/);
+
+            // Prefix with special characters should throw
+            expect(() => {
+                AutoEnv.parse(config, 'DB_');
+            }).toThrow(/Invalid prefix "DB_"/);
+
+            // Mixed case should throw
+            expect(() => {
+                AutoEnv.parse(config, 'Db');
+            }).toThrow(/Invalid prefix "Db"/);
+        });
+
         it('should support nested objects', () => {
             const config = {
                 connection: {
@@ -80,6 +99,35 @@ describe('AutoEnv - Standalone Usage', () => {
 
             expect(config.connection.host).toBe('remote.example.com');
             expect(config.connection.port).toBe(3307);
+        });
+
+        it('should support deeply nested objects (4 levels)', () => {
+            const config = {
+                a1: {
+                    b1: {
+                        c1: {
+                            d1: 'test',
+                            d2: false
+                        }
+                    },
+                    b2: false
+                },
+                a2: true
+            };
+
+            // Set environment variables at different nesting levels
+            process.env.TEST_A1_B1_C1_D1 = 'production';
+            process.env.TEST_A1_B1_C1_D2 = 'true';
+            process.env.TEST_A1_B2 = 'true';
+            process.env.TEST_A2 = 'false';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Verify all levels are correctly parsed
+            expect(config.a1.b1.c1.d1).toBe('production');
+            expect(config.a1.b1.c1.d2).toBe(true);
+            expect(config.a1.b2).toBe(true);
+            expect(config.a2).toBe(false);
         });
 
         it('should support custom overrides', () => {
@@ -252,6 +300,151 @@ describe('AutoEnv - Standalone Usage', () => {
             expect(Object.prototype.hasOwnProperty.call(config.nested, 'inherited')).toBe(false);
         });
 
+        it('should handle nested class instances recursively', () => {
+            class InnerConfig {
+                value = 'default';
+                count = 10;
+            }
+
+            class OuterConfig {
+                inner = new InnerConfig();
+                name = 'outer';
+            }
+
+            const config = new OuterConfig();
+
+            process.env.TEST_INNER_VALUE = 'updated';
+            process.env.TEST_INNER_COUNT = '20';
+            process.env.TEST_NAME = 'modified';
+
+            AutoEnv.parse(config, 'TEST');
+
+            expect(config.inner.value).toBe('updated');
+            expect(config.inner.count).toBe(20);
+            expect(config.name).toBe('modified');
+        });
+
+        it('should ignore non-object JSON for complex objects', () => {
+            class ComplexConfig {
+                value = 100;
+            }
+
+            const config = {
+                complex: new ComplexConfig()
+            };
+
+            // Provide JSON that parses to a non-object
+            process.env.TEST_COMPLEX = '"just a string"';
+            process.env.TEST_COMPLEX_VALUE = '200';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should ignore the non-object JSON and use dot-notation
+            expect(config.complex.value).toBe(200);
+        });
+
+        it('should ignore non-object JSON for nested plain objects', () => {
+            const config = {
+                nested: {
+                    value: 100,
+                    name: 'default'
+                }
+            };
+
+            // Provide JSON that parses to a primitive (number)
+            process.env.TEST_NESTED = '42';
+            process.env.TEST_NESTED_VALUE = '200';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should ignore the non-object JSON and use dot-notation
+            expect(config.nested.value).toBe(200);
+            expect(config.nested.name).toBe('default');
+        });
+
+        it('should ignore null JSON for nested plain objects', () => {
+            const config = {
+                nested: {
+                    value: 100
+                }
+            };
+
+            // Provide JSON that parses to null
+            process.env.TEST_NESTED = 'null';
+            process.env.TEST_NESTED_VALUE = '300';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should ignore the null JSON and use dot-notation
+            expect(config.nested.value).toBe(300);
+        });
+
+        it('should apply valid JSON to nested plain objects', () => {
+            const config = {
+                nested: {
+                    value: 100,
+                    name: 'default'
+                }
+            };
+
+            // Provide valid JSON object
+            process.env.TEST_NESTED = '{"value": 500, "name": "from-json"}';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should apply JSON values
+            expect(config.nested.value).toBe(500);
+            expect(config.nested.name).toBe('from-json');
+        });
+
+        it('should apply valid JSON to complex objects', () => {
+            class ComplexConfig {
+                value = 100;
+                count = 5;
+            }
+
+            const config = {
+                complex: new ComplexConfig()
+            };
+
+            // Provide valid JSON object
+            process.env.TEST_COMPLEX = '{"value": 999, "count": 42}';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should apply JSON values
+            expect(config.complex.value).toBe(999);
+            expect(config.complex.count).toBe(42);
+        });
+
+        it('should handle deeply nested class instances (3 levels)', () => {
+            class Level3 {
+                value = 'deep';
+            }
+
+            class Level2 {
+                nested = new Level3();
+                count = 5;
+            }
+
+            class Level1 {
+                inner = new Level2();
+                name = 'root';
+            }
+
+            const config = new Level1();
+
+            process.env.TEST_INNER_NESTED_VALUE = 'very-deep';
+            process.env.TEST_INNER_COUNT = '10';
+            process.env.TEST_NAME = 'updated-root';
+
+            AutoEnv.parse(config, 'TEST');
+
+            expect(config.inner.nested.value).toBe('very-deep');
+            expect(config.inner.count).toBe(10);
+            expect(config.name).toBe('updated-root');
+        });
+
         it('should skip inherited properties in complex objects', () => {
             // Create a complex object (class instance) with prototype
             class ComplexConfig {
@@ -277,6 +470,416 @@ describe('AutoEnv - Standalone Usage', () => {
         });
     });
 
+    describe('Optional prefix support', () => {
+        it('should parse environment variables without prefix', () => {
+            const config = {
+                host: 'localhost',
+                port: 5432,
+                ssl: false
+            };
+
+            process.env.HOST = 'example.com';
+            process.env.PORT = '3306';
+            process.env.SSL = 'true';
+
+            AutoEnv.parse(config);
+
+            expect(config.host).toBe('example.com');
+            expect(config.port).toBe(3306);
+            expect(config.ssl).toBe(true);
+
+            // Cleanup
+            delete process.env.HOST;
+            delete process.env.PORT;
+            delete process.env.SSL;
+        });
+
+        it('should parse nested objects without prefix', () => {
+            const config = {
+                database: {
+                    host: 'localhost',
+                    port: 5432
+                }
+            };
+
+            process.env.DATABASE_HOST = 'remote.example.com';
+            process.env.DATABASE_PORT = '3307';
+
+            AutoEnv.parse(config);
+
+            expect(config.database.host).toBe('remote.example.com');
+            expect(config.database.port).toBe(3307);
+
+            // Cleanup
+            delete process.env.DATABASE_HOST;
+            delete process.env.DATABASE_PORT;
+        });
+
+        it('should support custom overrides without prefix', () => {
+            const config = {
+                port: 5432,
+                environment: 'development'
+            };
+
+            const overrides = new Map();
+            overrides.set('port', (obj: typeof config, envVar: string) => {
+                const value = process.env[envVar];
+                if (value) {
+                    const port = parseInt(value, 10);
+                    if (port >= 1 && port <= 65535) {
+                        obj.port = port;
+                    }
+                }
+            });
+
+            process.env.PORT = '8080';
+            process.env.ENVIRONMENT = 'production';
+
+            AutoEnv.parse(config, '', overrides);
+
+            expect(config.port).toBe(8080);
+            expect(config.environment).toBe('production');
+
+            // Cleanup
+            delete process.env.PORT;
+            delete process.env.ENVIRONMENT;
+        });
+
+        it('should work with loadNestedFromEnv without prefix', () => {
+            process.env.ENABLED = 'true';
+            process.env.PATH = './custom/path';
+            process.env.MAX_FILES = '50';
+
+            const result = AutoEnv.loadNestedFromEnv('', {
+                enabled: false,
+                path: './default',
+                maxFiles: 10
+            });
+
+            expect(result).toEqual({
+                enabled: true,
+                path: './custom/path',
+                maxFiles: 50
+            });
+
+            // Cleanup
+            delete process.env.ENABLED;
+            delete process.env.PATH;
+            delete process.env.MAX_FILES;
+        });
+
+        it('should handle camelCase properties without prefix', () => {
+            const config = {
+                maxRetries: 3,
+                connectionTimeout: 5000,
+                apiKey: ''
+            };
+
+            process.env.MAX_RETRIES = '10';
+            process.env.CONNECTION_TIMEOUT = '30000';
+            process.env.API_KEY = 'secret-key-123';
+
+            AutoEnv.parse(config);
+
+            expect(config.maxRetries).toBe(10);
+            expect(config.connectionTimeout).toBe(30000);
+            expect(config.apiKey).toBe('secret-key-123');
+
+            // Cleanup
+            delete process.env.MAX_RETRIES;
+            delete process.env.CONNECTION_TIMEOUT;
+            delete process.env.API_KEY;
+        });
+
+        it('should handle complex objects (class instances) without prefix', () => {
+            // Create a class instance (complex object)
+            class DatabaseConfig {
+                host: string = 'localhost';
+                port: number = 5432;
+                timeout: number = 5000;
+            }
+
+            const dbInstance = new DatabaseConfig();
+            const config = {
+                database: dbInstance
+            };
+
+            // Set env vars without prefix for complex object properties
+            process.env.DATABASE_HOST = 'complex-host.example.com';
+            process.env.DATABASE_PORT = '3307';
+            process.env.DATABASE_TIMEOUT = '10000';
+
+            AutoEnv.parse(config, ''); // Explicit empty prefix
+
+            // Should use dot-notation for complex object
+            expect(config.database.host).toBe('complex-host.example.com');
+            expect(config.database.port).toBe(3307);
+            expect(config.database.timeout).toBe(10000);
+
+            // Cleanup
+            delete process.env.DATABASE_HOST;
+            delete process.env.DATABASE_PORT;
+            delete process.env.DATABASE_TIMEOUT;
+        });
+
+        it('should handle complex objects at root level without prefix', () => {
+            // Test with class instance directly
+            class AppConfig {
+                port: number = 3000;
+                debug: boolean = false;
+            }
+
+            const appInstance = new AppConfig();
+            const config = {
+                app: appInstance
+            };
+
+            // Set env vars without any prefix
+            process.env.APP_PORT = '8080';
+            process.env.APP_DEBUG = 'true';
+
+            AutoEnv.parse(config, ''); // Empty string prefix
+
+            expect(config.app.port).toBe(8080);
+            expect(config.app.debug).toBe(true);
+
+            // Cleanup
+            delete process.env.APP_PORT;
+            delete process.env.APP_DEBUG;
+        });
+
+        it('should handle complex object with empty string property name', () => {
+            // Edge case: property with empty string as key
+            class NestedConfig {
+                value: number = 100;
+                name: string = 'default';
+            }
+
+            const nestedInstance = new NestedConfig();
+            const config: Record<string, NestedConfig> = {
+                '': nestedInstance  // Empty string as property name
+            };
+
+            // When prefix is empty and key is empty, envVarName becomes empty
+            // So nested properties should be accessed directly
+            process.env.VALUE = '200';
+            process.env.NAME = 'custom';
+
+            AutoEnv.parse(config, ''); // Empty prefix
+
+            expect(config[''].value).toBe(200);
+            expect(config[''].name).toBe('custom');
+
+            // Cleanup
+            delete process.env.VALUE;
+            delete process.env.NAME;
+        });
+    });
+
+    describe('createFrom() - Class-based instantiation', () => {
+        it('should create and populate instance from class with prefix', () => {
+            class DatabaseConfig {
+                host: string = 'localhost';
+                port: number = 5432;
+                ssl: boolean = false;
+            }
+
+            process.env.DB_HOST = 'prod.example.com';
+            process.env.DB_PORT = '5433';
+            process.env.DB_SSL = 'true';
+
+            const config = AutoEnv.createFrom(DatabaseConfig, 'DB');
+
+            expect(config).toBeInstanceOf(DatabaseConfig);
+            expect(config.host).toBe('prod.example.com');
+            expect(config.port).toBe(5433);
+            expect(config.ssl).toBe(true);
+
+            // Cleanup
+            delete process.env.DB_HOST;
+            delete process.env.DB_PORT;
+            delete process.env.DB_SSL;
+        });
+
+        it('should create and populate instance from class without prefix', () => {
+            class AppConfig {
+                nodeEnv: string = 'development';
+                port: number = 3000;
+                debug: boolean = false;
+            }
+
+            process.env.NODE_ENV = 'production';
+            process.env.PORT = '8080';
+            process.env.DEBUG = 'true';
+
+            const config = AutoEnv.createFrom(AppConfig);
+
+            expect(config).toBeInstanceOf(AppConfig);
+            expect(config.nodeEnv).toBe('production');
+            expect(config.port).toBe(8080);
+            expect(config.debug).toBe(true);
+
+            // Cleanup
+            delete process.env.NODE_ENV;
+            delete process.env.PORT;
+            delete process.env.DEBUG;
+        });
+
+        it('should create instance with nested objects', () => {
+            class ServerConfig {
+                host: string = '0.0.0.0';
+                port: number = 3000;
+                database = {
+                    host: 'localhost',
+                    port: 5432
+                };
+            }
+
+            process.env.SERVER_HOST = '127.0.0.1';
+            process.env.SERVER_PORT = '4000';
+            process.env.SERVER_DATABASE_HOST = 'db.example.com';
+            process.env.SERVER_DATABASE_PORT = '5433';
+
+            const config = AutoEnv.createFrom(ServerConfig, 'SERVER');
+
+            expect(config).toBeInstanceOf(ServerConfig);
+            expect(config.host).toBe('127.0.0.1');
+            expect(config.port).toBe(4000);
+            expect(config.database.host).toBe('db.example.com');
+            expect(config.database.port).toBe(5433);
+
+            // Cleanup
+            delete process.env.SERVER_HOST;
+            delete process.env.SERVER_PORT;
+            delete process.env.SERVER_DATABASE_HOST;
+            delete process.env.SERVER_DATABASE_PORT;
+        });
+
+        it('should support custom overrides', () => {
+            class ApiConfig {
+                port: number = 3000;
+                environment: string = 'development';
+            }
+
+            const overrides = new Map();
+            overrides.set('port', (obj: ApiConfig, envVar: string) => {
+                const value = process.env[envVar];
+                if (value) {
+                    const port = parseInt(value, 10);
+                    if (port >= 1 && port <= 65535) {
+                        obj.port = port;
+                    } else {
+                        throw new Error(`Invalid port: ${port}`);
+                    }
+                }
+            });
+
+            process.env.API_PORT = '8443';
+            process.env.API_ENVIRONMENT = 'production';
+
+            const config = AutoEnv.createFrom(ApiConfig, 'API', overrides);
+
+            expect(config).toBeInstanceOf(ApiConfig);
+            expect(config.port).toBe(8443);
+            expect(config.environment).toBe('production');
+
+            // Cleanup
+            delete process.env.API_PORT;
+            delete process.env.API_ENVIRONMENT;
+        });
+
+        it('should preserve default values when env vars not set', () => {
+            class DefaultConfig {
+                timeout: number = 5000;
+                retries: number = 3;
+                enabled: boolean = true;
+            }
+
+            // Only set one env var
+            process.env.TEST_TIMEOUT = '10000';
+
+            const config = AutoEnv.createFrom(DefaultConfig, 'TEST');
+
+            expect(config).toBeInstanceOf(DefaultConfig);
+            expect(config.timeout).toBe(10000); // From env
+            expect(config.retries).toBe(3);     // Default preserved
+            expect(config.enabled).toBe(true);  // Default preserved
+
+            // Cleanup
+            delete process.env.TEST_TIMEOUT;
+        });
+
+        it('should work with classes having methods', () => {
+            class ConfigWithMethods {
+                host: string = 'localhost';
+                port: number = 5432;
+
+                getConnectionString(): string {
+                    return `${this.host}:${this.port}`;
+                }
+            }
+
+            process.env.APP_HOST = 'example.com';
+            process.env.APP_PORT = '3306';
+
+            const config = AutoEnv.createFrom(ConfigWithMethods, 'APP');
+
+            expect(config).toBeInstanceOf(ConfigWithMethods);
+            expect(config.host).toBe('example.com');
+            expect(config.port).toBe(3306);
+            expect(config.getConnectionString()).toBe('example.com:3306');
+
+            // Cleanup
+            delete process.env.APP_HOST;
+            delete process.env.APP_PORT;
+        });
+
+        describe('Defensive checks', () => {
+            it('should throw error when applyNestedObject receives null', () => {
+                // This test verifies the defensive check in applyNestedObject
+                // We need to trick the parse() method's type check by modifying after creation
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const config: any = {
+                    nested: { value: 'test' }
+                };
+
+                // Replace with null after parse starts checking
+                config.nested = null;
+
+                // Manually call the private method through parse
+                // Since parse checks types, we need to test via reflection
+                expect(() => {
+                    // @ts-expect-error - accessing private method for testing
+                    AutoEnv.applyNestedObject(config, 'nested', 'TEST_NESTED');
+                }).toThrow(/Internal error: applyNestedObject called with non-plain-object/);
+            });
+
+            it('should throw error when applyNestedObject receives non-object', () => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const config: any = { nested: 'not-an-object' };
+
+                expect(() => {
+                    // @ts-expect-error - accessing private method for testing
+                    AutoEnv.applyNestedObject(config, 'nested', 'TEST_NESTED');
+                }).toThrow(/Internal error: applyNestedObject called with non-plain-object/);
+            });
+
+            it('should throw error when applyComplexObject receives null', () => {
+                expect(() => {
+                    // @ts-expect-error - accessing private method for testing
+                    AutoEnv.applyComplexObject('complex', 'TEST_COMPLEX', null);
+                }).toThrow(/Internal error: applyComplexObject called with non-object/);
+            });
+
+            it('should throw error when applyComplexObject receives primitive', () => {
+                expect(() => {
+                    // @ts-expect-error - accessing private method for testing
+                    AutoEnv.applyComplexObject('complex', 'TEST_COMPLEX', 'string');
+                }).toThrow(/Internal error: applyComplexObject called with non-object/);
+            });
+        });
+    });
+
     describe('Type coercion methods', () => {
         describe('parseBoolean()', () => {
             it('should parse truthy values correctly', () => {
@@ -291,10 +894,29 @@ describe('AutoEnv - Standalone Usage', () => {
 
             it('should parse falsy values correctly', () => {
                 expect(AutoEnv.parseBoolean('false')).toBe(false);
+                expect(AutoEnv.parseBoolean('FALSE')).toBe(false);
                 expect(AutoEnv.parseBoolean('0')).toBe(false);
                 expect(AutoEnv.parseBoolean('no')).toBe(false);
+                expect(AutoEnv.parseBoolean('NO')).toBe(false);
                 expect(AutoEnv.parseBoolean('off')).toBe(false);
+                expect(AutoEnv.parseBoolean('OFF')).toBe(false);
+            });
+
+            it('should treat unrecognized values as false', () => {
                 expect(AutoEnv.parseBoolean('random')).toBe(false);
+                expect(AutoEnv.parseBoolean('maybe')).toBe(false);
+                expect(AutoEnv.parseBoolean('')).toBe(false);
+            });
+
+            it('should warn on unrecognized values in strict mode', () => {
+                const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+                expect(AutoEnv.parseBoolean('maybe', true)).toBe(false);
+                expect(warnSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('Unrecognized boolean value "maybe"')
+                );
+
+                warnSpy.mockRestore();
             });
         });
 
@@ -316,6 +938,13 @@ describe('AutoEnv - Standalone Usage', () => {
                 expect(AutoEnv.toSnakeCase('maxRetries')).toBe('max_retries');
                 expect(AutoEnv.toSnakeCase('connectionTimeout')).toBe('connection_timeout');
                 expect(AutoEnv.toSnakeCase('host')).toBe('host');
+            });
+
+            it('should handle consecutive capitals correctly', () => {
+                expect(AutoEnv.toSnakeCase('APIKey')).toBe('api_key');
+                expect(AutoEnv.toSnakeCase('HTTPSPort')).toBe('https_port');
+                expect(AutoEnv.toSnakeCase('XMLParser')).toBe('xml_parser');
+                expect(AutoEnv.toSnakeCase('URLPath')).toBe('url_path');
             });
         });
 
@@ -369,6 +998,143 @@ describe('AutoEnv - Standalone Usage', () => {
                 path: './default',
                 maxFiles: 10
             });
+        });
+
+        it('should deep clone defaults to avoid mutation', () => {
+            const defaults = {
+                database: {
+                    host: 'localhost',
+                    port: 5432
+                }
+            };
+
+            process.env.TEST_DATABASE_HOST = 'example.com';
+
+            const result1 = AutoEnv.loadNestedFromEnv('TEST', defaults);
+            const result2 = AutoEnv.loadNestedFromEnv('TEST', defaults);
+
+            // Verify results are independent
+            expect(result1.database.host).toBe('example.com');
+            expect(result2.database.host).toBe('example.com');
+
+            // Verify original is unmodified
+            expect(defaults.database.host).toBe('localhost');
+
+            // Verify results don't share references
+            result1.database.port = 9999;
+            expect(result2.database.port).toBe(5432);
+        });
+
+        it('should skip inherited properties', () => {
+            // Create an object with inherited properties
+            const proto = { inherited: 'from-proto' };
+            const defaults = Object.create(proto) as { inherited?: string; own: string };
+            defaults.own = 'default';
+
+            process.env.TEST_OWN = 'updated';
+            process.env.TEST_INHERITED = 'should-not-apply';
+
+            const result = AutoEnv.loadNestedFromEnv('TEST', defaults);
+
+            // Only own property should be updated
+            expect(result.own).toBe('updated');
+            // Inherited property should not be in result
+            expect(Object.prototype.hasOwnProperty.call(result, 'inherited')).toBe(false);
+        });
+    });
+
+    describe('enumValidator()', () => {
+        it('should validate enum values correctly', () => {
+            type Environment = 'development' | 'staging' | 'production';
+
+            const config = {
+                environment: 'development' as Environment
+            };
+
+            const overrides = new Map();
+            overrides.set('environment', AutoEnv.enumValidator('environment', ['development', 'staging', 'production']));
+
+            process.env.TEST_ENVIRONMENT = 'production';
+
+            AutoEnv.parse(config, 'TEST', overrides);
+
+            expect(config.environment).toBe('production');
+        });
+
+        it('should throw error for invalid enum values', () => {
+            const config = {
+                environment: 'development'
+            };
+
+            const overrides = new Map();
+            overrides.set('environment', AutoEnv.enumValidator('environment', ['development', 'staging', 'production']));
+
+            process.env.TEST_ENVIRONMENT = 'invalid';
+
+            expect(() => {
+                AutoEnv.parse(config, 'TEST', overrides);
+            }).toThrow(/Invalid value for TEST_ENVIRONMENT: "invalid"/);
+        });
+
+        it('should keep default value when env var not set', () => {
+            const config = {
+                environment: 'development'
+            };
+
+            const overrides = new Map();
+            overrides.set('environment', AutoEnv.enumValidator('environment', ['development', 'staging', 'production']));
+
+            delete process.env.TEST_ENVIRONMENT;
+
+            AutoEnv.parse(config, 'TEST', overrides);
+
+            expect(config.environment).toBe('development');
+        });
+
+        it('should support case-insensitive matching', () => {
+            const config = {
+                logLevel: 'INFO'
+            };
+
+            const overrides = new Map();
+            overrides.set('logLevel', AutoEnv.enumValidator('logLevel', ['DEBUG', 'INFO', 'WARN', 'ERROR'], { caseSensitive: false }));
+
+            process.env.TEST_LOG_LEVEL = 'debug';
+
+            AutoEnv.parse(config, 'TEST', overrides);
+
+            // Should use the original case from allowedValues
+            expect(config.logLevel).toBe('DEBUG');
+        });
+
+        it('should be case-sensitive by default', () => {
+            const config = {
+                status: 'Active'
+            };
+
+            const overrides = new Map();
+            overrides.set('status', AutoEnv.enumValidator('status', ['Active', 'Inactive']));
+
+            process.env.TEST_STATUS = 'active';
+
+            expect(() => {
+                AutoEnv.parse(config, 'TEST', overrides);
+            }).toThrow(/Invalid value for TEST_STATUS: "active"/);
+        });
+
+        it('should preserve original case from allowedValues', () => {
+            const config = {
+                mode: 'read'
+            };
+
+            const overrides = new Map();
+            overrides.set('mode', AutoEnv.enumValidator('mode', ['read', 'write', 'admin']));
+
+            process.env.TEST_MODE = 'write';
+
+            AutoEnv.parse(config, 'TEST', overrides);
+
+            expect(config.mode).toBe('write');
         });
     });
 

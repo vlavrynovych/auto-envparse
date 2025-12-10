@@ -39,7 +39,7 @@ export class AutoEnv {
      * based on naming convention and type coercion.
      *
      * @param target - Object to populate from environment variables
-     * @param prefix - Environment variable prefix (e.g., 'DB', 'APP', 'REDIS')
+     * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
      * @param overrides - Optional custom parsers for specific properties
      *
      * @example
@@ -51,30 +51,40 @@ export class AutoEnv {
      *     poolSize: 10
      * };
      *
-     * // Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
+     * // With prefix - Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
      * AutoEnv.parse(config, 'DB');
+     * // Result: { host: 'example.com', port: 3306, ssl: true, poolSize: 10 }
+     *
+     * // Without prefix - Environment: HOST=example.com, PORT=3306, SSL=true
+     * AutoEnv.parse(config);
      * // Result: { host: 'example.com', port: 3306, ssl: true, poolSize: 10 }
      * ```
      */
     static parse<T extends object>(
         target: T,
-        prefix: string,
+        prefix: string = '',
         overrides?: Map<string, (target: T, envVarName: string) => void>
     ): void {
+        // Validate prefix format if provided
+        if (prefix && !/^[A-Z0-9]+$/.test(prefix)) {
+            throw new Error(`Invalid prefix "${prefix}". Use uppercase letters and numbers only.`);
+        }
+
         for (const key in target) {
             if (!Object.prototype.hasOwnProperty.call(target, key)) {
                 continue;
             }
 
+            // Calculate env var name once
+            const envVarName = this.buildEnvVarName(prefix, key);
+
             // Check if there's a custom override for this property
             if (overrides?.has(key)) {
-                const envVarName = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
                 overrides.get(key)!(target, envVarName);
                 continue;
             }
 
             const value = target[key];
-            const envVarName = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
 
             // Handle different types
             if (value === null || value === undefined) {
@@ -82,17 +92,90 @@ export class AutoEnv {
                 this.applyPrimitive(target, key, envVarName);
             } else if (Array.isArray(value)) {
                 this.applyArray(target, key, envVarName);
-            } else if (typeof value === 'object' && value.constructor === Object) {
+            } else if (this.isPlainObject(value)) {
                 // Plain object - use nested parsing
                 this.applyNestedObject(target, key, envVarName);
             } else if (typeof value === 'object') {
                 // Complex object (class instance)
-                this.applyComplexObject(target, key, envVarName, value);
+                this.applyComplexObject(key, envVarName, value);
             } else {
                 // Primitives (string, number, boolean)
                 this.applyPrimitive(target, key, envVarName);
             }
         }
+    }
+
+    /**
+     * Check if a value is a plain object (not an array, class instance, or null).
+     * Works across realms (iframes, vm contexts, etc.)
+     *
+     * @param value - Value to check
+     * @returns True if value is a plain object
+     */
+    private static isPlainObject(value: unknown): boolean {
+        if (typeof value !== 'object' || value === null) {
+            return false;
+        }
+        const proto = Object.getPrototypeOf(value);
+        return proto === null || proto === Object.prototype;
+    }
+
+    /**
+     * Create and populate an instance from a class constructor.
+     *
+     * This method instantiates a class and populates it from environment variables.
+     * Perfect for when you already have classes with default values defined.
+     *
+     * @param classConstructor - Class constructor function with default values
+     * @param prefix - Optional environment variable prefix. Defaults to empty string.
+     * @param overrides - Optional custom parsers for specific properties
+     * @returns New instance of the class populated from environment variables
+     *
+     * @example
+     * ```typescript
+     * class DatabaseConfig {
+     *     host = 'localhost';
+     *     port = 5432;
+     *     ssl = false;
+     * }
+     *
+     * // Environment: DB_HOST=prod.example.com, DB_PORT=5433, DB_SSL=true
+     * const config = AutoEnv.createFrom(DatabaseConfig, 'DB');
+     * // config is instance of DatabaseConfig with env values applied
+     * ```
+     *
+     * @example
+     * ```typescript
+     * class AppConfig {
+     *     nodeEnv = 'development';
+     *     port = 3000;
+     *     debug = false;
+     * }
+     *
+     * // Environment: NODE_ENV=production, PORT=8080, DEBUG=true
+     * const config = AutoEnv.createFrom(AppConfig); // No prefix
+     * ```
+     */
+    static createFrom<T extends { new(): object }>(
+        classConstructor: T,
+        prefix?: string,
+        overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
+    ): InstanceType<T> {
+        const instance = new classConstructor() as InstanceType<T>;
+        this.parse(instance, prefix, overrides);
+        return instance;
+    }
+
+    /**
+     * Build environment variable name from prefix and property key.
+     *
+     * @param prefix - Optional prefix (empty string if not provided)
+     * @param key - Property key
+     * @returns Environment variable name (e.g., 'DB_HOST' or 'HOST')
+     */
+    private static buildEnvVarName(prefix: string, key: string): string {
+        const snakeKey = this.toSnakeCase(key).toUpperCase();
+        return prefix ? `${prefix}_${snakeKey}` : snakeKey;
     }
 
     /**
@@ -123,6 +206,7 @@ export class AutoEnv {
      * Apply array value from environment variable (expects JSON format).
      *
      * Handles special cases like RegExp arrays.
+     * Note: RegExp detection only checks if ALL elements in the default array are RegExp instances.
      *
      * @param target - Target object
      * @param key - Property key
@@ -139,8 +223,11 @@ export class AutoEnv {
                 const parsed = JSON.parse(envValue);
                 if (Array.isArray(parsed)) {
                     // Handle special cases (like RegExp arrays)
+                    // Check if ALL elements in the current array are RegExp instances
                     const currentArray = target[key];
-                    if (Array.isArray(currentArray) && currentArray.length > 0 && currentArray[0] instanceof RegExp) {
+                    if (Array.isArray(currentArray) &&
+                        currentArray.length > 0 &&
+                        currentArray.every(item => item instanceof RegExp)) {
                         target[key] = parsed.map(p => new RegExp(p)) as T[K];
                     } else {
                         target[key] = parsed as T[K];
@@ -167,22 +254,32 @@ export class AutoEnv {
         key: K,
         envVarName: string
     ): void {
-        const value = target[key];
-        if (typeof value === 'object' && value !== null) {
-            // Try JSON first
-            const envValue = process.env[envVarName];
-            if (envValue) {
-                try {
-                    const parsed = JSON.parse(envValue);
-                    Object.assign(value, parsed);
-                } catch {
-                    console.warn(`Warning: Invalid ${envVarName} JSON. Using dot-notation if available.`);
-                }
-            }
-            // Then apply dot-notation (takes precedence)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            target[key] = this.loadNestedFromEnv(envVarName, value as any) as T[K];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const value = target[key] as any;
+
+        // Defensive check - should never happen if called correctly from parse()
+        if (!this.isPlainObject(value)) {
+            throw new Error(
+                `Internal error: applyNestedObject called with non-plain-object for key '${String(key)}'. ` +
+                `Expected plain object, got ${value === null ? 'null' : typeof value}`
+            );
         }
+
+        // Try JSON first
+        const envValue = process.env[envVarName];
+        if (envValue) {
+            try {
+                const parsed = JSON.parse(envValue);
+                // Validate parsed value is an object before mutating
+                if (typeof parsed === 'object' && parsed !== null) {
+                    Object.assign(value, parsed);
+                }
+            } catch {
+                console.warn(`Warning: Invalid ${envVarName} JSON. Using dot-notation if available.`);
+            }
+        }
+        // Then apply dot-notation (takes precedence)
+        target[key] = this.loadNestedFromEnv(envVarName, value) as T[K];
     }
 
     /**
@@ -190,42 +287,57 @@ export class AutoEnv {
      *
      * Handles objects like class instances with their own structure.
      * Tries JSON parsing first, then recursively applies dot-notation for nested properties.
+     * Supports nested class instances and plain objects.
      *
-     * @param target - Target object
-     * @param key - Property key
+     * @param key - Property key (used for error messages)
      * @param envVarName - Environment variable name
      * @param value - Current property value
      */
-    private static applyComplexObject<T extends object, K extends keyof T>(
-        target: T,
+    private static applyComplexObject<K extends PropertyKey>(
         key: K,
         envVarName: string,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         value: any
     ): void {
+        // Defensive check - should never happen if called correctly from parse()
+        if (typeof value !== 'object' || value === null) {
+            throw new Error(
+                `Internal error: applyComplexObject called with non-object for key '${String(key)}'. ` +
+                `Expected object, got ${value === null ? 'null' : typeof value}`
+            );
+        }
+
         // Try JSON first
         const envValue = process.env[envVarName];
         if (envValue) {
             try {
                 const parsed = JSON.parse(envValue);
-                Object.assign(value, parsed);
+                // Validate parsed value is an object before mutating
+                if (typeof parsed === 'object' && parsed !== null) {
+                    Object.assign(value, parsed);
+                }
             } catch {
                 console.warn(`Warning: Invalid ${envVarName} JSON. Using dot-notation if available.`);
             }
         }
 
         // Recursively apply dot-notation for nested properties
-        if (typeof value === 'object' && value !== null) {
-            for (const nestedKey in value) {
-                if (!Object.prototype.hasOwnProperty.call(value, nestedKey)) {
-                    continue;
-                }
-                const nestedEnvKey = `${envVarName}_${this.toSnakeCase(nestedKey).toUpperCase()}`;
-                const nestedValue = process.env[nestedEnvKey];
-                if (nestedValue !== undefined && nestedValue !== '') {
-                    const nestedType = typeof value[nestedKey];
-                    value[nestedKey] = this.coerceValue(nestedValue, nestedType);
-                }
+        for (const nestedKey in value) {
+            if (!Object.prototype.hasOwnProperty.call(value, nestedKey)) {
+                continue;
+            }
+            const nestedProp = value[nestedKey];
+            const snakeNestedKey = this.toSnakeCase(nestedKey).toUpperCase();
+            const nestedEnvKey = envVarName ? `${envVarName}_${snakeNestedKey}` : snakeNestedKey;
+            const nestedEnvValue = process.env[nestedEnvKey];
+
+            // Handle nested objects recursively
+            if (typeof nestedProp === 'object' && nestedProp !== null && !Array.isArray(nestedProp)) {
+                this.applyComplexObject(nestedKey, nestedEnvKey, nestedProp);
+            } else if (nestedEnvValue !== undefined && nestedEnvValue !== '') {
+                // Handle primitives - empty string means "no value set", keep default
+                const nestedType = typeof nestedProp;
+                value[nestedKey] = this.coerceValue(nestedEnvValue, nestedType);
             }
         }
     }
@@ -233,17 +345,28 @@ export class AutoEnv {
     /**
      * Load a nested object from dot-notation environment variables.
      *
-     * Looks for environment variables with the pattern: PREFIX_KEY=value
+     * Looks for environment variables with the pattern: PREFIX_KEY=value or KEY=value (if no prefix)
      * Automatically coerces types based on default value types.
      *
-     * @param prefix - Prefix for environment variables (e.g., 'APP_LOGGING')
-     * @param defaultValue - Default object structure with types
-     * @returns Object built from env vars or default value
+     * Note: Empty string environment variables are treated as "not set" and the default value is kept.
+     *       This allows distinguishing between "unset" and "set to empty".
+     *
+     * @param prefix - Optional prefix for environment variables (e.g., 'APP_LOGGING'). Defaults to empty string.
+     * @param defaultValue - Default object structure with types (will be deep cloned)
+     * @returns New object built from env vars or default value
      *
      * @example
      * ```typescript
-     * // Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
+     * // With prefix - Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
      * const config = AutoEnv.loadNestedFromEnv('APP_LOGGING', {
+     *     enabled: false,
+     *     path: './logs',
+     *     maxFiles: 10
+     * });
+     * // Result: { enabled: true, path: './logs', maxFiles: 20 }
+     *
+     * // Without prefix - Environment: ENABLED=true, MAX_FILES=20
+     * const config = AutoEnv.loadNestedFromEnv('', {
      *     enabled: false,
      *     path: './logs',
      *     maxFiles: 10
@@ -253,22 +376,29 @@ export class AutoEnv {
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     static loadNestedFromEnv<T extends Record<string, any>>(
-        prefix: string,
+        prefix: string = '',
         defaultValue: T
     ): T {
-        const result = { ...defaultValue };
+        // Deep clone to avoid mutation of the original default value
+        const result = JSON.parse(JSON.stringify(defaultValue));
 
         for (const key in defaultValue) {
             if (!Object.prototype.hasOwnProperty.call(defaultValue, key)) {
                 continue;
             }
 
+            const value = defaultValue[key];
             // Convert camelCase to SNAKE_CASE for env var name
-            const envKey = `${prefix}_${this.toSnakeCase(key).toUpperCase()}`;
+            const envKey = this.buildEnvVarName(prefix, key);
             const envValue = process.env[envKey];
 
-            if (envValue !== undefined && envValue !== '') {
-                const defaultType = typeof defaultValue[key];
+            // Check if this property is a plain nested object
+            if (this.isPlainObject(value)) {
+                // Recursively process nested plain objects
+                result[key] = this.loadNestedFromEnv(envKey, value) as T[Extract<keyof T, string>];
+            } else if (envValue !== undefined && envValue !== '') {
+                // Empty string means "no value set", keep default
+                const defaultType = typeof value;
                 result[key] = this.coerceValue(envValue, defaultType) as T[Extract<keyof T, string>];
             }
         }
@@ -299,14 +429,41 @@ export class AutoEnv {
      * Parse a string to boolean.
      *
      * Truthy values: 'true', '1', 'yes', 'on' (case-insensitive)
-     * Everything else is false.
+     * Falsy values: 'false', '0', 'no', 'off' (case-insensitive)
+     * Everything else defaults to false, with optional warning in strict mode.
      *
      * @param value - String value
+     * @param strict - If true, warns on unrecognized values (default: false)
      * @returns Boolean value
+     *
+     * @example
+     * ```typescript
+     * AutoEnv.parseBoolean('true');   // true
+     * AutoEnv.parseBoolean('yes');    // true
+     * AutoEnv.parseBoolean('false');  // false
+     * AutoEnv.parseBoolean('no');     // false
+     * AutoEnv.parseBoolean('maybe');  // false (no warning by default)
+     * AutoEnv.parseBoolean('maybe', true);  // false (warns about unrecognized value)
+     * ```
      */
-    static parseBoolean(value: string): boolean {
+    static parseBoolean(value: string, strict = false): boolean {
         const normalized = value.toLowerCase().trim();
-        return ['true', '1', 'yes', 'on'].includes(normalized);
+        const truthy = ['true', '1', 'yes', 'on'];
+        const falsy = ['false', '0', 'no', 'off'];
+
+        if (truthy.includes(normalized)) {
+            return true;
+        }
+        if (falsy.includes(normalized)) {
+            return false;
+        }
+
+        // Unrecognized value
+        if (strict) {
+            console.warn(`Warning: Unrecognized boolean value "${value}". Treating as false. ` +
+                `Expected: ${[...truthy, ...falsy].join(', ')}`);
+        }
+        return false;
     }
 
     /**
@@ -326,17 +483,97 @@ export class AutoEnv {
     /**
      * Convert camelCase to snake_case.
      *
+     * Handles consecutive capital letters properly (e.g., 'HTTPSPort' → 'https_port')
+     *
      * @param str - camelCase string
      * @returns snake_case string
      *
      * @example
      * ```typescript
-     * AutoEnv.toSnakeCase('poolSize');     // 'pool_size'
-     * AutoEnv.toSnakeCase('maxRetries');   // 'max_retries'
-     * AutoEnv.toSnakeCase('host');         // 'host'
+     * AutoEnv.toSnakeCase('poolSize');      // 'pool_size'
+     * AutoEnv.toSnakeCase('maxRetries');    // 'max_retries'
+     * AutoEnv.toSnakeCase('host');          // 'host'
+     * AutoEnv.toSnakeCase('APIKey');        // 'api_key'
+     * AutoEnv.toSnakeCase('HTTPSPort');     // 'https_port'
      * ```
      */
     static toSnakeCase(str: string): string {
-        return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+        return str
+            // Handle consecutive capitals: 'XMLParser' → 'XML_Parser'
+            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+            // Handle normal camelCase: 'camelCase' → 'camel_Case'
+            .replace(/([a-z])([A-Z])/g, '$1_$2')
+            // Convert to lowercase
+            .toLowerCase();
+    }
+
+    /**
+     * Create an enum validator for use with overrides.
+     *
+     * Returns a validator function that checks if the environment variable value
+     * is one of the allowed enum values. Throws an error if invalid.
+     *
+     * @param propertyKey - The property key to validate (must match the key in overrides Map)
+     * @param allowedValues - Array of valid enum values
+     * @param options - Optional configuration
+     * @returns Override function for use with parse()
+     *
+     * @example
+     * ```typescript
+     * import parseEnv, { enumValidator } from 'auto-envparse';
+     *
+     * type Environment = 'development' | 'staging' | 'production';
+     *
+     * const config = {
+     *     environment: 'development' as Environment
+     * };
+     *
+     * const overrides = new Map();
+     * overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
+     *
+     * parseEnv(config, 'APP', overrides);
+     * // Valid: APP_ENVIRONMENT=production
+     * // Invalid: APP_ENVIRONMENT=test (throws error)
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Case-insensitive matching
+     * overrides.set('logLevel', enumValidator('logLevel', ['DEBUG', 'INFO', 'WARN', 'ERROR'], { caseSensitive: false }));
+     * // Accepts: debug, DEBUG, Debug, etc.
+     * ```
+     */
+    static enumValidator<T extends object>(
+        propertyKey: string,
+        allowedValues: string[],
+        options: { caseSensitive?: boolean } = {}
+    ): (target: T, envVarName: string) => void {
+        const { caseSensitive = true } = options;
+
+        return (target: T, envVarName: string) => {
+            const value = process.env[envVarName];
+
+            if (!value) {
+                // No value provided, keep default
+                return;
+            }
+
+            const checkValue = caseSensitive ? value : value.toLowerCase();
+            const allowed = caseSensitive
+                ? allowedValues
+                : allowedValues.map(v => v.toLowerCase());
+
+            if (allowed.includes(checkValue)) {
+                // Valid enum value - find original case from allowedValues
+                const matchIndex = allowed.indexOf(checkValue);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (target as any)[propertyKey] = allowedValues[matchIndex];
+            } else {
+                throw new Error(
+                    `Invalid value for ${envVarName}: "${value}". ` +
+                    `Must be one of: ${allowedValues.join(', ')}`
+                );
+            }
+        };
     }
 }
