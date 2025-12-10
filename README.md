@@ -34,6 +34,23 @@ console.log(config);
 // }
 ```
 
+**Works with classes too:**
+
+```typescript
+import { createFrom } from 'auto-envparse';
+
+class DatabaseConfig {
+    host = 'localhost';
+    port = 5432;
+    ssl = false;
+    poolSize = 10;
+}
+
+// Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
+const config = createFrom(DatabaseConfig, 'DB');
+// Returns a DatabaseConfig instance with values from environment
+```
+
 **No schemas. No validators. No manual mapping. Just works.**
 
 ## Features
@@ -92,8 +109,6 @@ const config = {
 
 // Environment variables: HOST, PORT, NODE_ENV
 parseEnv(config);
-// or
-parse(config);
 ```
 
 This is useful for:
@@ -117,50 +132,11 @@ const config = {
 };
 
 // Environment:
-// DB_DATABASE_HOST=prod-db.example.com
-// DB_DATABASE_PORT=5433
-// DB_DATABASE_SSL=true
-// DB_REDIS_HOST=prod-redis.example.com
-// DB_REDIS_PORT=6380
-parseEnv(config, 'DB');
-```
-
-### Custom Validation with Overrides
-
-```typescript
-import parseEnv from 'auto-envparse';
-
-const config = {
-    port: 3000,
-    environment: 'development'
-};
-
-const overrides = new Map();
-
-// Custom validation for port
-overrides.set('port', (obj, envVar) => {
-    const value = process.env[envVar];
-    if (value) {
-        const port = parseInt(value, 10);
-        if (port >= 1 && port <= 65535) {
-            obj.port = port;
-        } else {
-            throw new Error(`Invalid port: ${port}`);
-        }
-    }
-});
-
-// Custom validation for environment
-overrides.set('environment', (obj, envVar) => {
-    const value = process.env[envVar];
-    if (value && ['development', 'staging', 'production'].includes(value)) {
-        obj.environment = value;
-    } else {
-        throw new Error(`Invalid environment: ${value}`);
-    }
-});
-
-parseEnv(config, 'APP', overrides);
+// APP_DATABASE_HOST=prod-db.example.com
+// APP_DATABASE_PORT=5433
+// APP_DATABASE_SSL=true
+// APP_REDIS_HOST=prod-redis.example.com
+parseEnv(config, 'APP');
 ```
 
 ### Class-Based Configuration
@@ -222,163 +198,68 @@ Boolean values accept multiple formats (case-insensitive):
 - **Truthy**: `'true'`, `'1'`, `'yes'`, `'on'`
 - **Falsy**: Everything else (`'false'`, `'0'`, `'no'`, `'off'`, etc.)
 
-## Naming Convention
+## Custom Validation
 
-auto-envparse automatically converts camelCase property names to SNAKE_CASE environment variables:
+Add custom validation when needed:
 
 ```typescript
+import parseEnv from 'auto-envparse';
+
 const config = {
-    apiKey: '',           // → APP_API_KEY
-    maxRetries: 3,        // → APP_MAX_RETRIES
-    connectionTimeout: 30 // → APP_CONNECTION_TIMEOUT
+    port: 3000,
+    environment: 'development'
 };
 
-parseEnv(config, 'APP');
-```
+const overrides = new Map();
 
-## Advanced Usage
-
-### Using Individual Utility Functions
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-// Parse booleans
-AutoEnv.parseBoolean('true');  // true
-AutoEnv.parseBoolean('1');     // true
-AutoEnv.parseBoolean('yes');   // true
-
-// Parse numbers
-AutoEnv.parseNumber('42');     // 42
-AutoEnv.parseNumber('3.14');   // 3.14
-
-// Convert names
-AutoEnv.toSnakeCase('poolSize');  // 'pool_size'
-
-// Type coercion
-AutoEnv.coerceValue('42', 'number');    // 42
-AutoEnv.coerceValue('true', 'boolean'); // true
-AutoEnv.coerceValue('hello', 'string'); // 'hello'
-```
-
-### Loading Nested Objects Separately
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-// Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
-const loggingConfig = AutoEnv.loadNestedFromEnv('APP_LOGGING', {
-    enabled: false,
-    path: './logs',
-    maxFiles: 10
+overrides.set('port', (obj, envVar) => {
+    const value = process.env[envVar];
+    if (value) {
+        const port = parseInt(value, 10);
+        if (port >= 1 && port <= 65535) {
+            obj.port = port;
+        } else {
+            throw new Error(`Invalid port: ${port}`);
+        }
+    }
 });
 
-console.log(loggingConfig);
-// {
-//   enabled: true,
-//   path: './logs',
-//   maxFiles: 20
-// }
+parseEnv(config, 'APP', overrides);
 ```
 
-### Using the AutoEnv Class Directly
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-const config = { host: 'localhost', port: 5432 };
-AutoEnv.parse(config, 'DB');
-```
-
-## Real-World Examples
-
-### Database Configuration
+## Real-World Example
 
 ```typescript
 import parseEnv from 'auto-envparse';
 
-const dbConfig = {
-    host: 'localhost',
-    port: 5432,
-    database: 'myapp',
-    user: 'postgres',
-    password: '',
-    ssl: false,
-    pool: {
-        min: 2,
-        max: 10,
-        idleTimeoutMillis: 30000
-    }
-};
-
-autoEnv(dbConfig, 'DATABASE');
-
-// Supported env vars:
-// DATABASE_HOST
-// DATABASE_PORT
-// DATABASE_DATABASE
-// DATABASE_USER
-// DATABASE_PASSWORD
-// DATABASE_SSL
-// DATABASE_POOL_MIN
-// DATABASE_POOL_MAX
-// DATABASE_POOL_IDLE_TIMEOUT_MILLIS
-```
-
-### Application Configuration
-
-```typescript
-import parseEnv from 'auto-envparse';
-
-const appConfig = {
+const config = {
     port: 3000,
     host: '0.0.0.0',
     nodeEnv: 'development',
-    cors: {
-        enabled: true,
-        origin: '*',
-        credentials: false
+    database: {
+        host: 'localhost',
+        port: 5432,
+        user: 'postgres',
+        password: '',
+        ssl: false,
+        pool: {
+            min: 2,
+            max: 10
+        }
     },
-    rateLimit: {
-        windowMs: 900000,
-        max: 100
-    },
-    logging: {
-        level: 'info',
-        format: 'json'
+    redis: {
+        host: 'localhost',
+        port: 6379
     }
 };
 
-autoEnv(appConfig, 'APP');
-```
+parseEnv(config, 'APP');
 
-### Microservices Configuration
-
-```typescript
-import parseEnv from 'auto-envparse';
-
-const services = {
-    auth: {
-        url: 'http://localhost:4001',
-        timeout: 5000
-    },
-    payment: {
-        url: 'http://localhost:4002',
-        timeout: 10000
-    },
-    notification: {
-        url: 'http://localhost:4003',
-        timeout: 3000
-    }
-};
-
-autoEnv(services, 'SERVICES');
-
-// Env vars:
-// SERVICES_AUTH_URL=https://auth.example.com
-// SERVICES_AUTH_TIMEOUT=5000
-// SERVICES_PAYMENT_URL=https://payment.example.com
-// ...
+// Supported env vars:
+// APP_PORT, APP_HOST, APP_NODE_ENV
+// APP_DATABASE_HOST, APP_DATABASE_PORT, APP_DATABASE_USER, etc.
+// APP_DATABASE_POOL_MIN, APP_DATABASE_POOL_MAX
+// APP_REDIS_HOST, APP_REDIS_PORT
 ```
 
 ## Comparison with Other Libraries
@@ -423,6 +304,15 @@ parseEnv(config, 'DB');
 
 For detailed API documentation, see [API.md](./API.md).
 
+### Main Functions
+
+- **`parseEnv(target, prefix?, overrides?)`** - Parse environment variables into object
+- **`parse(target, prefix?, overrides?)`** - Alias for parseEnv
+- **`createFrom(classConstructor, prefix?, overrides?)`** - Create and populate class instance
+- **`AutoEnv` class** - Access to all utility functions
+
+See the [complete API documentation](./API.md) for detailed signatures, examples, and advanced usage.
+
 ## How It Works
 
 auto-envparse uses JavaScript reflection to:
@@ -434,13 +324,6 @@ auto-envparse uses JavaScript reflection to:
 5. **Apply values** - Update object properties in-place
 
 No magic. No complex schemas. Just smart reflection.
-
-## Edge Cases and Limitations
-
-- **Inherited properties** are skipped (only own properties are processed)
-- **Arrays** expect JSON format in env vars: `'["item1", "item2"]'`
-- **Complex objects** (class instances) are supported with dot-notation
-- **null/undefined** default values are treated as strings
 
 ## Contributing
 

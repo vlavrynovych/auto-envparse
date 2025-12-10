@@ -65,20 +65,26 @@ export class AutoEnv {
         prefix: string = '',
         overrides?: Map<string, (target: T, envVarName: string) => void>
     ): void {
+        // Validate prefix format if provided
+        if (prefix && !/^[A-Z0-9]+$/.test(prefix)) {
+            throw new Error(`Invalid prefix "${prefix}". Use uppercase letters and numbers only.`);
+        }
+
         for (const key in target) {
             if (!Object.prototype.hasOwnProperty.call(target, key)) {
                 continue;
             }
 
+            // Calculate env var name once
+            const envVarName = this.buildEnvVarName(prefix, key);
+
             // Check if there's a custom override for this property
             if (overrides?.has(key)) {
-                const envVarName = this.buildEnvVarName(prefix, key);
                 overrides.get(key)!(target, envVarName);
                 continue;
             }
 
             const value = target[key];
-            const envVarName = this.buildEnvVarName(prefix, key);
 
             // Handle different types
             if (value === null || value === undefined) {
@@ -86,7 +92,7 @@ export class AutoEnv {
                 this.applyPrimitive(target, key, envVarName);
             } else if (Array.isArray(value)) {
                 this.applyArray(target, key, envVarName);
-            } else if (typeof value === 'object' && value.constructor === Object) {
+            } else if (this.isPlainObject(value)) {
                 // Plain object - use nested parsing
                 this.applyNestedObject(target, key, envVarName);
             } else if (typeof value === 'object') {
@@ -97,6 +103,21 @@ export class AutoEnv {
                 this.applyPrimitive(target, key, envVarName);
             }
         }
+    }
+
+    /**
+     * Check if a value is a plain object (not an array, class instance, or null).
+     * Works across realms (iframes, vm contexts, etc.)
+     *
+     * @param value - Value to check
+     * @returns True if value is a plain object
+     */
+    private static isPlainObject(value: unknown): boolean {
+        if (typeof value !== 'object' || value === null) {
+            return false;
+        }
+        const proto = Object.getPrototypeOf(value);
+        return proto === null || proto === Object.prototype;
     }
 
     /**
@@ -185,6 +206,7 @@ export class AutoEnv {
      * Apply array value from environment variable (expects JSON format).
      *
      * Handles special cases like RegExp arrays.
+     * Note: RegExp detection only checks if ALL elements in the default array are RegExp instances.
      *
      * @param target - Target object
      * @param key - Property key
@@ -201,8 +223,11 @@ export class AutoEnv {
                 const parsed = JSON.parse(envValue);
                 if (Array.isArray(parsed)) {
                     // Handle special cases (like RegExp arrays)
+                    // Check if ALL elements in the current array are RegExp instances
                     const currentArray = target[key];
-                    if (Array.isArray(currentArray) && currentArray.length > 0 && currentArray[0] instanceof RegExp) {
+                    if (Array.isArray(currentArray) &&
+                        currentArray.length > 0 &&
+                        currentArray.every(item => item instanceof RegExp)) {
                         target[key] = parsed.map(p => new RegExp(p)) as T[K];
                     } else {
                         target[key] = parsed as T[K];
@@ -233,7 +258,7 @@ export class AutoEnv {
         const value = target[key] as any;
 
         // Defensive check - should never happen if called correctly from parse()
-        if (typeof value !== 'object' || value === null || value.constructor !== Object) {
+        if (!this.isPlainObject(value)) {
             throw new Error(
                 `Internal error: applyNestedObject called with non-plain-object for key '${String(key)}'. ` +
                 `Expected plain object, got ${value === null ? 'null' : typeof value}`
@@ -245,7 +270,10 @@ export class AutoEnv {
         if (envValue) {
             try {
                 const parsed = JSON.parse(envValue);
-                Object.assign(value, parsed);
+                // Validate parsed value is an object before mutating
+                if (typeof parsed === 'object' && parsed !== null) {
+                    Object.assign(value, parsed);
+                }
             } catch {
                 console.warn(`Warning: Invalid ${envVarName} JSON. Using dot-notation if available.`);
             }
@@ -259,6 +287,7 @@ export class AutoEnv {
      *
      * Handles objects like class instances with their own structure.
      * Tries JSON parsing first, then recursively applies dot-notation for nested properties.
+     * Supports nested class instances and plain objects.
      *
      * @param key - Property key (used for error messages)
      * @param envVarName - Environment variable name
@@ -283,7 +312,10 @@ export class AutoEnv {
         if (envValue) {
             try {
                 const parsed = JSON.parse(envValue);
-                Object.assign(value, parsed);
+                // Validate parsed value is an object before mutating
+                if (typeof parsed === 'object' && parsed !== null) {
+                    Object.assign(value, parsed);
+                }
             } catch {
                 console.warn(`Warning: Invalid ${envVarName} JSON. Using dot-notation if available.`);
             }
@@ -294,12 +326,18 @@ export class AutoEnv {
             if (!Object.prototype.hasOwnProperty.call(value, nestedKey)) {
                 continue;
             }
+            const nestedProp = value[nestedKey];
             const snakeNestedKey = this.toSnakeCase(nestedKey).toUpperCase();
             const nestedEnvKey = envVarName ? `${envVarName}_${snakeNestedKey}` : snakeNestedKey;
-            const nestedValue = process.env[nestedEnvKey];
-            if (nestedValue !== undefined && nestedValue !== '') {
-                const nestedType = typeof value[nestedKey];
-                value[nestedKey] = this.coerceValue(nestedValue, nestedType);
+            const nestedEnvValue = process.env[nestedEnvKey];
+
+            // Handle nested objects recursively
+            if (typeof nestedProp === 'object' && nestedProp !== null && !Array.isArray(nestedProp)) {
+                this.applyComplexObject(nestedKey, nestedEnvKey, nestedProp);
+            } else if (nestedEnvValue !== undefined && nestedEnvValue !== '') {
+                // Handle primitives - empty string means "no value set", keep default
+                const nestedType = typeof nestedProp;
+                value[nestedKey] = this.coerceValue(nestedEnvValue, nestedType);
             }
         }
     }
@@ -310,9 +348,12 @@ export class AutoEnv {
      * Looks for environment variables with the pattern: PREFIX_KEY=value or KEY=value (if no prefix)
      * Automatically coerces types based on default value types.
      *
+     * Note: Empty string environment variables are treated as "not set" and the default value is kept.
+     *       This allows distinguishing between "unset" and "set to empty".
+     *
      * @param prefix - Optional prefix for environment variables (e.g., 'APP_LOGGING'). Defaults to empty string.
-     * @param defaultValue - Default object structure with types
-     * @returns Object built from env vars or default value
+     * @param defaultValue - Default object structure with types (will be deep cloned)
+     * @returns New object built from env vars or default value
      *
      * @example
      * ```typescript
@@ -338,7 +379,8 @@ export class AutoEnv {
         prefix: string = '',
         defaultValue: T
     ): T {
-        const result = { ...defaultValue };
+        // Deep clone to avoid mutation of the original default value
+        const result = JSON.parse(JSON.stringify(defaultValue));
 
         for (const key in defaultValue) {
             if (!Object.prototype.hasOwnProperty.call(defaultValue, key)) {
@@ -351,10 +393,11 @@ export class AutoEnv {
             const envValue = process.env[envKey];
 
             // Check if this property is a plain nested object
-            if (typeof value === 'object' && value !== null && value.constructor === Object) {
+            if (this.isPlainObject(value)) {
                 // Recursively process nested plain objects
                 result[key] = this.loadNestedFromEnv(envKey, value) as T[Extract<keyof T, string>];
             } else if (envValue !== undefined && envValue !== '') {
+                // Empty string means "no value set", keep default
                 const defaultType = typeof value;
                 result[key] = this.coerceValue(envValue, defaultType) as T[Extract<keyof T, string>];
             }
@@ -386,14 +429,41 @@ export class AutoEnv {
      * Parse a string to boolean.
      *
      * Truthy values: 'true', '1', 'yes', 'on' (case-insensitive)
-     * Everything else is false.
+     * Falsy values: 'false', '0', 'no', 'off' (case-insensitive)
+     * Everything else defaults to false, with optional warning in strict mode.
      *
      * @param value - String value
+     * @param strict - If true, warns on unrecognized values (default: false)
      * @returns Boolean value
+     *
+     * @example
+     * ```typescript
+     * AutoEnv.parseBoolean('true');   // true
+     * AutoEnv.parseBoolean('yes');    // true
+     * AutoEnv.parseBoolean('false');  // false
+     * AutoEnv.parseBoolean('no');     // false
+     * AutoEnv.parseBoolean('maybe');  // false (no warning by default)
+     * AutoEnv.parseBoolean('maybe', true);  // false (warns about unrecognized value)
+     * ```
      */
-    static parseBoolean(value: string): boolean {
+    static parseBoolean(value: string, strict = false): boolean {
         const normalized = value.toLowerCase().trim();
-        return ['true', '1', 'yes', 'on'].includes(normalized);
+        const truthy = ['true', '1', 'yes', 'on'];
+        const falsy = ['false', '0', 'no', 'off'];
+
+        if (truthy.includes(normalized)) {
+            return true;
+        }
+        if (falsy.includes(normalized)) {
+            return false;
+        }
+
+        // Unrecognized value
+        if (strict) {
+            console.warn(`Warning: Unrecognized boolean value "${value}". Treating as false. ` +
+                `Expected: ${[...truthy, ...falsy].join(', ')}`);
+        }
+        return false;
     }
 
     /**
@@ -413,17 +483,27 @@ export class AutoEnv {
     /**
      * Convert camelCase to snake_case.
      *
+     * Handles consecutive capital letters properly (e.g., 'HTTPSPort' → 'https_port')
+     *
      * @param str - camelCase string
      * @returns snake_case string
      *
      * @example
      * ```typescript
-     * AutoEnv.toSnakeCase('poolSize');     // 'pool_size'
-     * AutoEnv.toSnakeCase('maxRetries');   // 'max_retries'
-     * AutoEnv.toSnakeCase('host');         // 'host'
+     * AutoEnv.toSnakeCase('poolSize');      // 'pool_size'
+     * AutoEnv.toSnakeCase('maxRetries');    // 'max_retries'
+     * AutoEnv.toSnakeCase('host');          // 'host'
+     * AutoEnv.toSnakeCase('APIKey');        // 'api_key'
+     * AutoEnv.toSnakeCase('HTTPSPort');     // 'https_port'
      * ```
      */
     static toSnakeCase(str: string): string {
-        return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+        return str
+            // Handle consecutive capitals: 'XMLParser' → 'XML_Parser'
+            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+            // Handle normal camelCase: 'camelCase' → 'camel_Case'
+            .replace(/([a-z])([A-Z])/g, '$1_$2')
+            // Convert to lowercase
+            .toLowerCase();
     }
 }

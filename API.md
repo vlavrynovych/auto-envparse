@@ -810,14 +810,14 @@ Use consistent, descriptive prefixes for related configuration:
 
 ```typescript
 // ✅ Good
-autoEnv(databaseConfig, 'DATABASE');
-autoEnv(redisConfig, 'REDIS');
-autoEnv(authConfig, 'AUTH');
+parseEnv(databaseConfig, 'DATABASE');
+parseEnv(redisConfig, 'REDIS');
+parseEnv(authConfig, 'AUTH');
 
 // ❌ Bad
-autoEnv(databaseConfig, 'DB');
-autoEnv(redisConfig, 'CACHE');
-autoEnv(authConfig, 'LOGIN');
+parseEnv(databaseConfig, 'DB');
+parseEnv(redisConfig, 'CACHE');
+parseEnv(authConfig, 'LOGIN');
 ```
 
 ### 3. Document Environment Variables
@@ -839,7 +839,7 @@ const databaseConfig = {
     ssl: false
 };
 
-autoEnv(databaseConfig, 'DATABASE');
+parseEnv(databaseConfig, 'DATABASE');
 ```
 
 ### 4. Use Overrides for Validation

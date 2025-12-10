@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AutoEnv } from '../src/autoEnv';
 
 describe('AutoEnv - Standalone Usage', () => {
@@ -63,6 +63,25 @@ describe('AutoEnv - Standalone Usage', () => {
 
             expect(dbConfig.database).toBe('production');
             expect(dbConfig.timeout).toBe(10000);
+        });
+
+        it('should throw error for invalid prefix format', () => {
+            const config = { host: 'localhost' };
+
+            // Lowercase prefix should throw
+            expect(() => {
+                AutoEnv.parse(config, 'db');
+            }).toThrow(/Invalid prefix "db"/);
+
+            // Prefix with special characters should throw
+            expect(() => {
+                AutoEnv.parse(config, 'DB_');
+            }).toThrow(/Invalid prefix "DB_"/);
+
+            // Mixed case should throw
+            expect(() => {
+                AutoEnv.parse(config, 'Db');
+            }).toThrow(/Invalid prefix "Db"/);
         });
 
         it('should support nested objects', () => {
@@ -279,6 +298,151 @@ describe('AutoEnv - Standalone Usage', () => {
             expect(config.nested.value).toBe(200);
             // Inherited property should not be modified
             expect(Object.prototype.hasOwnProperty.call(config.nested, 'inherited')).toBe(false);
+        });
+
+        it('should handle nested class instances recursively', () => {
+            class InnerConfig {
+                value = 'default';
+                count = 10;
+            }
+
+            class OuterConfig {
+                inner = new InnerConfig();
+                name = 'outer';
+            }
+
+            const config = new OuterConfig();
+
+            process.env.TEST_INNER_VALUE = 'updated';
+            process.env.TEST_INNER_COUNT = '20';
+            process.env.TEST_NAME = 'modified';
+
+            AutoEnv.parse(config, 'TEST');
+
+            expect(config.inner.value).toBe('updated');
+            expect(config.inner.count).toBe(20);
+            expect(config.name).toBe('modified');
+        });
+
+        it('should ignore non-object JSON for complex objects', () => {
+            class ComplexConfig {
+                value = 100;
+            }
+
+            const config = {
+                complex: new ComplexConfig()
+            };
+
+            // Provide JSON that parses to a non-object
+            process.env.TEST_COMPLEX = '"just a string"';
+            process.env.TEST_COMPLEX_VALUE = '200';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should ignore the non-object JSON and use dot-notation
+            expect(config.complex.value).toBe(200);
+        });
+
+        it('should ignore non-object JSON for nested plain objects', () => {
+            const config = {
+                nested: {
+                    value: 100,
+                    name: 'default'
+                }
+            };
+
+            // Provide JSON that parses to a primitive (number)
+            process.env.TEST_NESTED = '42';
+            process.env.TEST_NESTED_VALUE = '200';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should ignore the non-object JSON and use dot-notation
+            expect(config.nested.value).toBe(200);
+            expect(config.nested.name).toBe('default');
+        });
+
+        it('should ignore null JSON for nested plain objects', () => {
+            const config = {
+                nested: {
+                    value: 100
+                }
+            };
+
+            // Provide JSON that parses to null
+            process.env.TEST_NESTED = 'null';
+            process.env.TEST_NESTED_VALUE = '300';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should ignore the null JSON and use dot-notation
+            expect(config.nested.value).toBe(300);
+        });
+
+        it('should apply valid JSON to nested plain objects', () => {
+            const config = {
+                nested: {
+                    value: 100,
+                    name: 'default'
+                }
+            };
+
+            // Provide valid JSON object
+            process.env.TEST_NESTED = '{"value": 500, "name": "from-json"}';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should apply JSON values
+            expect(config.nested.value).toBe(500);
+            expect(config.nested.name).toBe('from-json');
+        });
+
+        it('should apply valid JSON to complex objects', () => {
+            class ComplexConfig {
+                value = 100;
+                count = 5;
+            }
+
+            const config = {
+                complex: new ComplexConfig()
+            };
+
+            // Provide valid JSON object
+            process.env.TEST_COMPLEX = '{"value": 999, "count": 42}';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Should apply JSON values
+            expect(config.complex.value).toBe(999);
+            expect(config.complex.count).toBe(42);
+        });
+
+        it('should handle deeply nested class instances (3 levels)', () => {
+            class Level3 {
+                value = 'deep';
+            }
+
+            class Level2 {
+                nested = new Level3();
+                count = 5;
+            }
+
+            class Level1 {
+                inner = new Level2();
+                name = 'root';
+            }
+
+            const config = new Level1();
+
+            process.env.TEST_INNER_NESTED_VALUE = 'very-deep';
+            process.env.TEST_INNER_COUNT = '10';
+            process.env.TEST_NAME = 'updated-root';
+
+            AutoEnv.parse(config, 'TEST');
+
+            expect(config.inner.nested.value).toBe('very-deep');
+            expect(config.inner.count).toBe(10);
+            expect(config.name).toBe('updated-root');
         });
 
         it('should skip inherited properties in complex objects', () => {
@@ -730,10 +894,29 @@ describe('AutoEnv - Standalone Usage', () => {
 
             it('should parse falsy values correctly', () => {
                 expect(AutoEnv.parseBoolean('false')).toBe(false);
+                expect(AutoEnv.parseBoolean('FALSE')).toBe(false);
                 expect(AutoEnv.parseBoolean('0')).toBe(false);
                 expect(AutoEnv.parseBoolean('no')).toBe(false);
+                expect(AutoEnv.parseBoolean('NO')).toBe(false);
                 expect(AutoEnv.parseBoolean('off')).toBe(false);
+                expect(AutoEnv.parseBoolean('OFF')).toBe(false);
+            });
+
+            it('should treat unrecognized values as false', () => {
                 expect(AutoEnv.parseBoolean('random')).toBe(false);
+                expect(AutoEnv.parseBoolean('maybe')).toBe(false);
+                expect(AutoEnv.parseBoolean('')).toBe(false);
+            });
+
+            it('should warn on unrecognized values in strict mode', () => {
+                const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+                expect(AutoEnv.parseBoolean('maybe', true)).toBe(false);
+                expect(warnSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('Unrecognized boolean value "maybe"')
+                );
+
+                warnSpy.mockRestore();
             });
         });
 
@@ -755,6 +938,13 @@ describe('AutoEnv - Standalone Usage', () => {
                 expect(AutoEnv.toSnakeCase('maxRetries')).toBe('max_retries');
                 expect(AutoEnv.toSnakeCase('connectionTimeout')).toBe('connection_timeout');
                 expect(AutoEnv.toSnakeCase('host')).toBe('host');
+            });
+
+            it('should handle consecutive capitals correctly', () => {
+                expect(AutoEnv.toSnakeCase('APIKey')).toBe('api_key');
+                expect(AutoEnv.toSnakeCase('HTTPSPort')).toBe('https_port');
+                expect(AutoEnv.toSnakeCase('XMLParser')).toBe('xml_parser');
+                expect(AutoEnv.toSnakeCase('URLPath')).toBe('url_path');
             });
         });
 
@@ -808,6 +998,48 @@ describe('AutoEnv - Standalone Usage', () => {
                 path: './default',
                 maxFiles: 10
             });
+        });
+
+        it('should deep clone defaults to avoid mutation', () => {
+            const defaults = {
+                database: {
+                    host: 'localhost',
+                    port: 5432
+                }
+            };
+
+            process.env.TEST_DATABASE_HOST = 'example.com';
+
+            const result1 = AutoEnv.loadNestedFromEnv('TEST', defaults);
+            const result2 = AutoEnv.loadNestedFromEnv('TEST', defaults);
+
+            // Verify results are independent
+            expect(result1.database.host).toBe('example.com');
+            expect(result2.database.host).toBe('example.com');
+
+            // Verify original is unmodified
+            expect(defaults.database.host).toBe('localhost');
+
+            // Verify results don't share references
+            result1.database.port = 9999;
+            expect(result2.database.port).toBe(5432);
+        });
+
+        it('should skip inherited properties', () => {
+            // Create an object with inherited properties
+            const proto = { inherited: 'from-proto' };
+            const defaults = Object.create(proto) as { inherited?: string; own: string };
+            defaults.own = 'default';
+
+            process.env.TEST_OWN = 'updated';
+            process.env.TEST_INHERITED = 'should-not-apply';
+
+            const result = AutoEnv.loadNestedFromEnv('TEST', defaults);
+
+            // Only own property should be updated
+            expect(result.own).toBe('updated');
+            // Inherited property should not be in result
+            expect(Object.prototype.hasOwnProperty.call(result, 'inherited')).toBe(false);
         });
     });
 
