@@ -8,6 +8,7 @@ Complete API reference for auto-envparse.
 - [Named Exports](#named-exports)
   - [parse()](#parse)
   - [createFrom()](#createfrom)
+  - [enumValidator()](#enumvalidator)
   - [AutoEnv Class](#autoenv-class)
 
 ---
@@ -158,6 +159,37 @@ function createFrom<T extends { new(): object }>(
 ```
 
 Equivalent to `AutoEnv.createFrom()`. See [AutoEnv.createFrom()](#autoenvcreatefrom) for details.
+
+---
+
+### enumValidator()
+
+Create an enum validator for use with overrides.
+
+```typescript
+function enumValidator<T extends object>(
+    propertyKey: string,
+    allowedValues: string[],
+    options?: { caseSensitive?: boolean }
+): (target: T, envVarName: string) => void
+```
+
+Provides a convenient way to validate environment variable values against allowed enum values.
+
+**Quick Example:**
+
+```typescript
+import parseEnv, { enumValidator } from 'auto-envparse';
+
+const config = { environment: 'development' };
+const overrides = new Map();
+
+overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
+
+parseEnv(config, 'APP', overrides);
+```
+
+Equivalent to `AutoEnv.enumValidator()`. See [AutoEnv.enumValidator()](#autoenvenvvalidator) for complete details and options.
 
 ---
 
@@ -500,6 +532,108 @@ AutoEnv.parseNumber('42');      // 42
 AutoEnv.parseNumber('3.14');    // 3.14
 AutoEnv.parseNumber('-10');     // -10
 AutoEnv.parseNumber('invalid'); // NaN
+```
+
+---
+
+#### AutoEnv.enumValidator()
+
+Create an enum validator for use with overrides.
+
+```typescript
+class AutoEnv {
+    static enumValidator<T extends object>(
+        propertyKey: string,
+        allowedValues: string[],
+        options?: { caseSensitive?: boolean }
+    ): (target: T, envVarName: string) => void;
+}
+```
+
+**Parameters:**
+
+- **propertyKey**: `string`
+  - The property key to validate (must match the key in overrides Map)
+  - Used to set the correct property on the target object
+
+- **allowedValues**: `string[]`
+  - Array of valid enum values
+  - Environment variable must match one of these values
+
+- **options**: `{ caseSensitive?: boolean }` *(optional)*
+  - `caseSensitive`: Whether to perform case-sensitive matching (default: `true`)
+  - When `false`, accepts any case but uses original case from `allowedValues`
+
+**Returns:**
+
+`(target: T, envVarName: string) => void` - Override function for use with `parse()`
+
+**Throws:**
+
+- Error if environment variable value is not in `allowedValues`
+
+**Example:**
+
+```typescript
+import parseEnv, { enumValidator } from 'auto-envparse';
+
+type Environment = 'development' | 'staging' | 'production';
+
+const config = {
+    environment: 'development' as Environment
+};
+
+const overrides = new Map();
+overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
+
+parseEnv(config, 'APP', overrides);
+
+// ✅ Valid: APP_ENVIRONMENT=production
+// ❌ Invalid: APP_ENVIRONMENT=test (throws error)
+```
+
+**Case-Insensitive Example:**
+
+```typescript
+const config = {
+    logLevel: 'INFO'
+};
+
+const overrides = new Map();
+overrides.set('logLevel', enumValidator('logLevel', ['DEBUG', 'INFO', 'WARN', 'ERROR'], { caseSensitive: false }));
+
+// Environment: APP_LOG_LEVEL=debug
+parseEnv(config, 'APP', overrides);
+
+// Result: config.logLevel === 'DEBUG' (uses original case)
+```
+
+**Multiple Enums:**
+
+```typescript
+type Environment = 'development' | 'staging' | 'production';
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+const config = {
+    environment: 'development' as Environment,
+    logLevel: 'info' as LogLevel
+};
+
+const overrides = new Map();
+overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
+overrides.set('logLevel', enumValidator('logLevel', ['debug', 'info', 'warn', 'error']));
+
+parseEnv(config, 'APP', overrides);
+```
+
+**Convenience Export:**
+
+```typescript
+// Also available as named export for convenience
+import { enumValidator } from 'auto-envparse';
+
+// Equivalent to AutoEnv.enumValidator()
+overrides.set('status', enumValidator('status', ['active', 'inactive']));
 ```
 
 ---

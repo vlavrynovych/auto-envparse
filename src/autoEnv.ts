@@ -506,4 +506,74 @@ export class AutoEnv {
             // Convert to lowercase
             .toLowerCase();
     }
+
+    /**
+     * Create an enum validator for use with overrides.
+     *
+     * Returns a validator function that checks if the environment variable value
+     * is one of the allowed enum values. Throws an error if invalid.
+     *
+     * @param propertyKey - The property key to validate (must match the key in overrides Map)
+     * @param allowedValues - Array of valid enum values
+     * @param options - Optional configuration
+     * @returns Override function for use with parse()
+     *
+     * @example
+     * ```typescript
+     * import parseEnv, { enumValidator } from 'auto-envparse';
+     *
+     * type Environment = 'development' | 'staging' | 'production';
+     *
+     * const config = {
+     *     environment: 'development' as Environment
+     * };
+     *
+     * const overrides = new Map();
+     * overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
+     *
+     * parseEnv(config, 'APP', overrides);
+     * // Valid: APP_ENVIRONMENT=production
+     * // Invalid: APP_ENVIRONMENT=test (throws error)
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Case-insensitive matching
+     * overrides.set('logLevel', enumValidator('logLevel', ['DEBUG', 'INFO', 'WARN', 'ERROR'], { caseSensitive: false }));
+     * // Accepts: debug, DEBUG, Debug, etc.
+     * ```
+     */
+    static enumValidator<T extends object>(
+        propertyKey: string,
+        allowedValues: string[],
+        options: { caseSensitive?: boolean } = {}
+    ): (target: T, envVarName: string) => void {
+        const { caseSensitive = true } = options;
+
+        return (target: T, envVarName: string) => {
+            const value = process.env[envVarName];
+
+            if (!value) {
+                // No value provided, keep default
+                return;
+            }
+
+            const checkValue = caseSensitive ? value : value.toLowerCase();
+            const allowed = caseSensitive
+                ? allowedValues
+                : allowedValues.map(v => v.toLowerCase());
+
+            if (allowed.includes(checkValue)) {
+                // Valid enum value - find original case from allowedValues
+                const matchIndex = allowed.indexOf(checkValue);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (target as any)[propertyKey] = allowedValues[matchIndex];
+            } else {
+                throw new Error(
+                    `Invalid value for ${envVarName}: "${value}". ` +
+                    `Must be one of: ${allowedValues.join(', ')}`
+                );
+            }
+        };
+    }
 }

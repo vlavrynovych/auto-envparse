@@ -1043,6 +1043,101 @@ describe('AutoEnv - Standalone Usage', () => {
         });
     });
 
+    describe('enumValidator()', () => {
+        it('should validate enum values correctly', () => {
+            type Environment = 'development' | 'staging' | 'production';
+
+            const config = {
+                environment: 'development' as Environment
+            };
+
+            const overrides = new Map();
+            overrides.set('environment', AutoEnv.enumValidator('environment', ['development', 'staging', 'production']));
+
+            process.env.TEST_ENVIRONMENT = 'production';
+
+            AutoEnv.parse(config, 'TEST', overrides);
+
+            expect(config.environment).toBe('production');
+        });
+
+        it('should throw error for invalid enum values', () => {
+            const config = {
+                environment: 'development'
+            };
+
+            const overrides = new Map();
+            overrides.set('environment', AutoEnv.enumValidator('environment', ['development', 'staging', 'production']));
+
+            process.env.TEST_ENVIRONMENT = 'invalid';
+
+            expect(() => {
+                AutoEnv.parse(config, 'TEST', overrides);
+            }).toThrow(/Invalid value for TEST_ENVIRONMENT: "invalid"/);
+        });
+
+        it('should keep default value when env var not set', () => {
+            const config = {
+                environment: 'development'
+            };
+
+            const overrides = new Map();
+            overrides.set('environment', AutoEnv.enumValidator('environment', ['development', 'staging', 'production']));
+
+            delete process.env.TEST_ENVIRONMENT;
+
+            AutoEnv.parse(config, 'TEST', overrides);
+
+            expect(config.environment).toBe('development');
+        });
+
+        it('should support case-insensitive matching', () => {
+            const config = {
+                logLevel: 'INFO'
+            };
+
+            const overrides = new Map();
+            overrides.set('logLevel', AutoEnv.enumValidator('logLevel', ['DEBUG', 'INFO', 'WARN', 'ERROR'], { caseSensitive: false }));
+
+            process.env.TEST_LOG_LEVEL = 'debug';
+
+            AutoEnv.parse(config, 'TEST', overrides);
+
+            // Should use the original case from allowedValues
+            expect(config.logLevel).toBe('DEBUG');
+        });
+
+        it('should be case-sensitive by default', () => {
+            const config = {
+                status: 'Active'
+            };
+
+            const overrides = new Map();
+            overrides.set('status', AutoEnv.enumValidator('status', ['Active', 'Inactive']));
+
+            process.env.TEST_STATUS = 'active';
+
+            expect(() => {
+                AutoEnv.parse(config, 'TEST', overrides);
+            }).toThrow(/Invalid value for TEST_STATUS: "active"/);
+        });
+
+        it('should preserve original case from allowedValues', () => {
+            const config = {
+                mode: 'read'
+            };
+
+            const overrides = new Map();
+            overrides.set('mode', AutoEnv.enumValidator('mode', ['read', 'write', 'admin']));
+
+            process.env.TEST_MODE = 'write';
+
+            AutoEnv.parse(config, 'TEST', overrides);
+
+            expect(config.mode).toBe('write');
+        });
+    });
+
     describe('Real-world usage examples', () => {
         it('should work for database configuration', () => {
             const dbConfig = {

@@ -76,6 +76,35 @@ export const parse = parseEnv;
  */
 export const createFrom = AutoEnv.createFrom.bind(AutoEnv);
 
+/**
+ * Create an enum validator for use with overrides.
+ *
+ * Provides a convenient way to validate that environment variable values
+ * match one of the allowed enum values. Throws an error if invalid.
+ *
+ * @param propertyKey - The property key to validate
+ * @param allowedValues - Array of valid enum values
+ * @param options - Optional configuration
+ * @returns Override function for use with parse()
+ *
+ * @example
+ * ```typescript
+ * import parseEnv, { enumValidator } from 'auto-envparse';
+ *
+ * type Environment = 'development' | 'staging' | 'production';
+ *
+ * const config = {
+ *     environment: 'development' as Environment
+ * };
+ *
+ * const overrides = new Map();
+ * overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
+ *
+ * parseEnv(config, 'APP', overrides);
+ * ```
+ */
+export const enumValidator = AutoEnv.enumValidator.bind(AutoEnv);
+
 // Utility functions removed from named exports.
 // Advanced users can access them via AutoEnv.* methods:
 // - AutoEnv.parseBoolean()
@@ -83,3 +112,4 @@ export const createFrom = AutoEnv.createFrom.bind(AutoEnv);
 // - AutoEnv.toSnakeCase()
 // - AutoEnv.coerceValue()
 // - AutoEnv.loadNestedFromEnv()
+// - AutoEnv.enumValidator()

@@ -212,6 +212,35 @@ overrides.set('port', (obj, envVar) => {
 parseEnv(config, 'APP', overrides);
 ```
 
+### Enum Validation
+
+For enum-like values, use the built-in `enumValidator` helper:
+
+```typescript
+import parseEnv, { enumValidator } from 'auto-envparse';
+
+type Environment = 'development' | 'staging' | 'production';
+
+const config = {
+    environment: 'development' as Environment,
+    logLevel: 'info'
+};
+
+const overrides = new Map();
+
+// Validate environment is one of the allowed values
+overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
+
+// Case-insensitive enum validation
+overrides.set('logLevel', enumValidator('logLevel', ['debug', 'info', 'warn', 'error'], { caseSensitive: false }));
+
+parseEnv(config, 'APP', overrides);
+
+// ✅ Valid: APP_ENVIRONMENT=production
+// ❌ Invalid: APP_ENVIRONMENT=test (throws error)
+// ✅ Valid: APP_LOG_LEVEL=DEBUG (accepts any case)
+```
+
 ---
 
 ## 📚 Documentation
