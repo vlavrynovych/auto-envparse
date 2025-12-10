@@ -1,6 +1,6 @@
 {
   "name": "auto-envparse",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "Automatic environment variable parsing with zero configuration and type inference",
   "main": "./dist/index.js",
