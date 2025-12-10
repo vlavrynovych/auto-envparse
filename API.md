@@ -4,22 +4,22 @@ Complete API reference for auto-envparse.
 
 ## Table of Contents
 
-- [Default Export: autoEnv()](#default-export-autoenv)
+- [Default Export: parseEnv()](#default-export-parseenv)
 - [Named Exports](#named-exports)
   - [parse()](#parse)
+  - [createFrom()](#createfrom)
   - [AutoEnv Class](#autoenv-class)
-  - [Utility Functions](#utility-functions)
 
 ---
 
-## Default Export: autoEnv()
+## Default Export: parseEnv()
 
 The main entry point for auto-envparse.
 
 ### Signature
 
 ```typescript
-function autoEnv<T extends object>(
+function parseEnv<T extends object>(
     target: T,
     prefix?: string,
     overrides?: Map<string, (target: T, envVarName: string) => void>
@@ -54,7 +54,7 @@ function autoEnv<T extends object>(
 ### Example with Prefix
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 const config = {
     host: 'localhost',
@@ -63,7 +63,7 @@ const config = {
 };
 
 // Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
-autoEnv(config, 'DB');
+parseEnv(config, 'DB');
 
 console.log(config);
 // {
@@ -76,7 +76,7 @@ console.log(config);
 ### Example without Prefix
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 const config = {
     host: 'localhost',
@@ -85,7 +85,7 @@ const config = {
 };
 
 // Environment: HOST=production.com, PORT=8080, NODE_ENV=production
-autoEnv(config);
+parseEnv(config);
 
 console.log(config);
 // {
@@ -98,7 +98,7 @@ console.log(config);
 ### With Overrides
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 const config = {
     port: 3000,
@@ -118,7 +118,7 @@ overrides.set('environment', (obj, envVar) => {
     }
 });
 
-autoEnv(config, 'APP', overrides);
+parseEnv(config, 'APP', overrides);
 ```
 
 ---
@@ -127,7 +127,7 @@ autoEnv(config, 'APP', overrides);
 
 ### parse()
 
-Alias for the default `autoEnv` function. Useful if you prefer the `parse` naming.
+Alias for the default `parseEnv` function. Useful if you prefer the `parse` naming.
 
 ```typescript
 import { parse } from 'auto-envparse';
@@ -141,7 +141,23 @@ const globalConfig = { nodeEnv: 'development', port: 3000 };
 parse(globalConfig);
 ```
 
-**Note:** `parse` and `autoEnv` are the same function. Use whichever name you prefer.
+**Note:** `parse` and `parseEnv` are the same function. Use whichever name you prefer.
+
+---
+
+### createFrom()
+
+Convenience function to create and populate an instance from a class constructor.
+
+```typescript
+function createFrom<T extends { new(): object }>(
+    classConstructor: T,
+    prefix?: string,
+    overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
+): InstanceType<T>
+```
+
+Equivalent to `AutoEnv.createFrom()`. See [AutoEnv.createFrom()](#autoenvcreatefrom) for details.
 
 ---
 
@@ -151,7 +167,7 @@ The core class that provides all parsing functionality.
 
 #### AutoEnv.parse()
 
-Same as the default export `autoEnv()` function.
+Same as the default export `parseEnv()` function.
 
 ```typescript
 class AutoEnv {
@@ -519,66 +535,6 @@ AutoEnv.toSnakeCase('host');             // 'host'
 
 ---
 
-### Utility Functions
-
-Standalone utility functions exported for convenience.
-
-#### parseBoolean()
-
-```typescript
-function parseBoolean(value: string): boolean
-```
-
-Equivalent to `AutoEnv.parseBoolean()`. See [AutoEnv.parseBoolean()](#autoenvparseboolean) for details.
-
----
-
-#### parseNumber()
-
-```typescript
-function parseNumber(value: string): number
-```
-
-Equivalent to `AutoEnv.parseNumber()`. See [AutoEnv.parseNumber()](#autoenvparsenumber) for details.
-
----
-
-#### toSnakeCase()
-
-```typescript
-function toSnakeCase(str: string): string
-```
-
-Equivalent to `AutoEnv.toSnakeCase()`. See [AutoEnv.toSnakeCase()](#autoenvtosnakecase) for details.
-
----
-
-#### coerceValue()
-
-```typescript
-function coerceValue(
-    value: string,
-    type: string
-): string | number | boolean
-```
-
-Equivalent to `AutoEnv.coerceValue()`. See [AutoEnv.coerceValue()](#autoenvcoercevalue) for details.
-
----
-
-#### loadNestedFromEnv()
-
-```typescript
-function loadNestedFromEnv<T extends Record<string, any>>(
-    prefix: string,
-    defaultValue: T
-): T
-```
-
-Equivalent to `AutoEnv.loadNestedFromEnv()`. See [AutoEnv.loadNestedFromEnv()](#autoenvloadnestedfromenv) for details.
-
----
-
 ## Type Coercion Details
 
 ### Supported Types
@@ -681,7 +637,7 @@ type OverrideFunction<T> = (
 ### Example: Port Validation
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 const config = {
     port: 3000
@@ -701,13 +657,13 @@ overrides.set('port', (obj, envVar) => {
     }
 });
 
-autoEnv(config, 'APP', overrides);
+parseEnv(config, 'APP', overrides);
 ```
 
 ### Example: Enum Validation
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 type Environment = 'development' | 'staging' | 'production';
 
@@ -728,13 +684,13 @@ overrides.set('environment', (obj, envVar) => {
     }
 });
 
-autoEnv(config, 'APP', overrides);
+parseEnv(config, 'APP', overrides);
 ```
 
 ### Example: Complex Transformation
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 const config = {
     allowedOrigins: ['http://localhost:3000']
@@ -754,7 +710,7 @@ overrides.set('allowedOrigins', (obj, envVar) => {
     }
 });
 
-autoEnv(config, 'APP', overrides);
+parseEnv(config, 'APP', overrides);
 
 // Supports both:
 // APP_ALLOWED_ORIGINS='["https://example.com", "https://app.example.com"]'
@@ -780,8 +736,8 @@ To add validation and error handling, use [custom overrides](#custom-overrides).
 ### Generic Constraints
 
 ```typescript
-// autoEnv() accepts any object
-function autoEnv<T extends object>(target: T, ...): void
+// parseEnv() accepts any object
+function parseEnv<T extends object>(target: T, ...): void
 
 // loadNestedFromEnv() accepts record-like objects
 function loadNestedFromEnv<T extends Record<string, any>>(
@@ -815,7 +771,7 @@ const config: DatabaseConfig = {
     }
 };
 
-autoEnv(config, 'DB');
+parseEnv(config, 'DB');
 
 // All types are preserved:
 const host: string = config.host;
@@ -935,7 +891,7 @@ const config = {
     }
 };
 
-autoEnv(config, 'APP');
+parseEnv(config, 'APP');
 
 // Environment variables:
 // APP_SERVER_PORT
@@ -967,7 +923,7 @@ const config = cleanEnv(process.env, {
 **auto-envparse:**
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 const config = {
     host: 'localhost',
@@ -975,7 +931,7 @@ const config = {
     ssl: false
 };
 
-autoEnv(config, 'DB');
+parseEnv(config, 'DB');
 ```
 
 ### From convict
@@ -1004,14 +960,14 @@ config.validate();
 **auto-envparse:**
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 const config = {
     host: 'localhost',
     port: 5432
 };
 
-autoEnv(config, 'DB');
+parseEnv(config, 'DB');
 ```
 
 ### From dotenv
@@ -1032,7 +988,7 @@ const config = {
 **auto-envparse:**
 
 ```typescript
-import autoEnv from 'auto-envparse';
+import parseEnv from 'auto-envparse';
 
 const config = {
     host: 'localhost',
@@ -1040,7 +996,7 @@ const config = {
     ssl: false
 };
 
-autoEnv(config, 'DB');
+parseEnv(config, 'DB');
 ```
 
 ---

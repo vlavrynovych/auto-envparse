@@ -82,6 +82,35 @@ describe('AutoEnv - Standalone Usage', () => {
             expect(config.connection.port).toBe(3307);
         });
 
+        it('should support deeply nested objects (4 levels)', () => {
+            const config = {
+                a1: {
+                    b1: {
+                        c1: {
+                            d1: 'test',
+                            d2: false
+                        }
+                    },
+                    b2: false
+                },
+                a2: true
+            };
+
+            // Set environment variables at different nesting levels
+            process.env.TEST_A1_B1_C1_D1 = 'production';
+            process.env.TEST_A1_B1_C1_D2 = 'true';
+            process.env.TEST_A1_B2 = 'true';
+            process.env.TEST_A2 = 'false';
+
+            AutoEnv.parse(config, 'TEST');
+
+            // Verify all levels are correctly parsed
+            expect(config.a1.b1.c1.d1).toBe('production');
+            expect(config.a1.b1.c1.d2).toBe(true);
+            expect(config.a1.b2).toBe(true);
+            expect(config.a2).toBe(false);
+        });
+
         it('should support custom overrides', () => {
             const config = {
                 port: 5432,
@@ -639,6 +668,51 @@ describe('AutoEnv - Standalone Usage', () => {
             // Cleanup
             delete process.env.APP_HOST;
             delete process.env.APP_PORT;
+        });
+
+        describe('Defensive checks', () => {
+            it('should throw error when applyNestedObject receives null', () => {
+                // This test verifies the defensive check in applyNestedObject
+                // We need to trick the parse() method's type check by modifying after creation
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const config: any = {
+                    nested: { value: 'test' }
+                };
+
+                // Replace with null after parse starts checking
+                config.nested = null;
+
+                // Manually call the private method through parse
+                // Since parse checks types, we need to test via reflection
+                expect(() => {
+                    // @ts-expect-error - accessing private method for testing
+                    AutoEnv.applyNestedObject(config, 'nested', 'TEST_NESTED');
+                }).toThrow(/Internal error: applyNestedObject called with non-plain-object/);
+            });
+
+            it('should throw error when applyNestedObject receives non-object', () => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const config: any = { nested: 'not-an-object' };
+
+                expect(() => {
+                    // @ts-expect-error - accessing private method for testing
+                    AutoEnv.applyNestedObject(config, 'nested', 'TEST_NESTED');
+                }).toThrow(/Internal error: applyNestedObject called with non-plain-object/);
+            });
+
+            it('should throw error when applyComplexObject receives null', () => {
+                expect(() => {
+                    // @ts-expect-error - accessing private method for testing
+                    AutoEnv.applyComplexObject('complex', 'TEST_COMPLEX', null);
+                }).toThrow(/Internal error: applyComplexObject called with non-object/);
+            });
+
+            it('should throw error when applyComplexObject receives primitive', () => {
+                expect(() => {
+                    // @ts-expect-error - accessing private method for testing
+                    AutoEnv.applyComplexObject('complex', 'TEST_COMPLEX', 'string');
+                }).toThrow(/Internal error: applyComplexObject called with non-object/);
+            });
         });
     });
 

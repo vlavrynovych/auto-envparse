@@ -91,7 +91,7 @@ export class AutoEnv {
                 this.applyNestedObject(target, key, envVarName);
             } else if (typeof value === 'object') {
                 // Complex object (class instance)
-                this.applyComplexObject(target, key, envVarName, value);
+                this.applyComplexObject(key, envVarName, value);
             } else {
                 // Primitives (string, number, boolean)
                 this.applyPrimitive(target, key, envVarName);
@@ -229,22 +229,29 @@ export class AutoEnv {
         key: K,
         envVarName: string
     ): void {
-        const value = target[key];
-        if (typeof value === 'object' && value !== null) {
-            // Try JSON first
-            const envValue = process.env[envVarName];
-            if (envValue) {
-                try {
-                    const parsed = JSON.parse(envValue);
-                    Object.assign(value, parsed);
-                } catch {
-                    console.warn(`Warning: Invalid ${envVarName} JSON. Using dot-notation if available.`);
-                }
-            }
-            // Then apply dot-notation (takes precedence)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            target[key] = this.loadNestedFromEnv(envVarName, value as any) as T[K];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const value = target[key] as any;
+
+        // Defensive check - should never happen if called correctly from parse()
+        if (typeof value !== 'object' || value === null || value.constructor !== Object) {
+            throw new Error(
+                `Internal error: applyNestedObject called with non-plain-object for key '${String(key)}'. ` +
+                `Expected plain object, got ${value === null ? 'null' : typeof value}`
+            );
         }
+
+        // Try JSON first
+        const envValue = process.env[envVarName];
+        if (envValue) {
+            try {
+                const parsed = JSON.parse(envValue);
+                Object.assign(value, parsed);
+            } catch {
+                console.warn(`Warning: Invalid ${envVarName} JSON. Using dot-notation if available.`);
+            }
+        }
+        // Then apply dot-notation (takes precedence)
+        target[key] = this.loadNestedFromEnv(envVarName, value) as T[K];
     }
 
     /**
@@ -253,18 +260,24 @@ export class AutoEnv {
      * Handles objects like class instances with their own structure.
      * Tries JSON parsing first, then recursively applies dot-notation for nested properties.
      *
-     * @param target - Target object
-     * @param key - Property key
+     * @param key - Property key (used for error messages)
      * @param envVarName - Environment variable name
      * @param value - Current property value
      */
-    private static applyComplexObject<T extends object, K extends keyof T>(
-        target: T,
+    private static applyComplexObject<K extends PropertyKey>(
         key: K,
         envVarName: string,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         value: any
     ): void {
+        // Defensive check - should never happen if called correctly from parse()
+        if (typeof value !== 'object' || value === null) {
+            throw new Error(
+                `Internal error: applyComplexObject called with non-object for key '${String(key)}'. ` +
+                `Expected object, got ${value === null ? 'null' : typeof value}`
+            );
+        }
+
         // Try JSON first
         const envValue = process.env[envVarName];
         if (envValue) {
@@ -277,18 +290,16 @@ export class AutoEnv {
         }
 
         // Recursively apply dot-notation for nested properties
-        if (typeof value === 'object' && value !== null) {
-            for (const nestedKey in value) {
-                if (!Object.prototype.hasOwnProperty.call(value, nestedKey)) {
-                    continue;
-                }
-                const snakeNestedKey = this.toSnakeCase(nestedKey).toUpperCase();
-                const nestedEnvKey = envVarName ? `${envVarName}_${snakeNestedKey}` : snakeNestedKey;
-                const nestedValue = process.env[nestedEnvKey];
-                if (nestedValue !== undefined && nestedValue !== '') {
-                    const nestedType = typeof value[nestedKey];
-                    value[nestedKey] = this.coerceValue(nestedValue, nestedType);
-                }
+        for (const nestedKey in value) {
+            if (!Object.prototype.hasOwnProperty.call(value, nestedKey)) {
+                continue;
+            }
+            const snakeNestedKey = this.toSnakeCase(nestedKey).toUpperCase();
+            const nestedEnvKey = envVarName ? `${envVarName}_${snakeNestedKey}` : snakeNestedKey;
+            const nestedValue = process.env[nestedEnvKey];
+            if (nestedValue !== undefined && nestedValue !== '') {
+                const nestedType = typeof value[nestedKey];
+                value[nestedKey] = this.coerceValue(nestedValue, nestedType);
             }
         }
     }
@@ -334,12 +345,17 @@ export class AutoEnv {
                 continue;
             }
 
+            const value = defaultValue[key];
             // Convert camelCase to SNAKE_CASE for env var name
             const envKey = this.buildEnvVarName(prefix, key);
             const envValue = process.env[envKey];
 
-            if (envValue !== undefined && envValue !== '') {
-                const defaultType = typeof defaultValue[key];
+            // Check if this property is a plain nested object
+            if (typeof value === 'object' && value !== null && value.constructor === Object) {
+                // Recursively process nested plain objects
+                result[key] = this.loadNestedFromEnv(envKey, value) as T[Extract<keyof T, string>];
+            } else if (envValue !== undefined && envValue !== '') {
+                const defaultType = typeof value;
                 result[key] = this.coerceValue(envValue, defaultType) as T[Extract<keyof T, string>];
             }
         }

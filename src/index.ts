@@ -7,7 +7,7 @@
 import { AutoEnv } from './autoEnv';
 
 /**
- * Automatically parse environment variables and apply them to the target object.
+ * Parse environment variables and apply them to the target object.
  *
  * This is the main entry point for auto-envparse. Uses reflection to discover
  * properties and automatically applies environment variables based on
@@ -19,7 +19,7 @@ import { AutoEnv } from './autoEnv';
  *
  * @example
  * ```typescript
- * import autoEnv from 'auto-envparse';
+ * import parseEnv from 'auto-envparse';
  *
  * const config = {
  *     host: 'localhost',
@@ -28,15 +28,15 @@ import { AutoEnv } from './autoEnv';
  * };
  *
  * // With prefix - Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
- * autoEnv(config, 'DB');
+ * parseEnv(config, 'DB');
  * // config is now: { host: 'example.com', port: 3306, ssl: true }
  *
  * // Without prefix - Environment: HOST=example.com, PORT=3306, SSL=true
- * autoEnv(config);
+ * parseEnv(config);
  * // config is now: { host: 'example.com', port: 3306, ssl: true }
  * ```
  */
-export default function autoEnv<T extends object>(
+export default function parseEnv<T extends object>(
     target: T,
     prefix?: string,
     overrides?: Map<string, (target: T, envVarName: string) => void>
@@ -48,10 +48,10 @@ export default function autoEnv<T extends object>(
 export { AutoEnv };
 
 /**
- * Alias for the default autoEnv function.
+ * Alias for parseEnv. Use whichever name you prefer.
  * Parse environment variables and apply them to the target object.
  */
-export const parse = autoEnv;
+export const parse = parseEnv;
 
 /**
  * Create and populate an instance from a class constructor.
@@ -76,8 +76,10 @@ export const parse = autoEnv;
  */
 export const createFrom = AutoEnv.createFrom.bind(AutoEnv);
 
-export const parseBoolean = AutoEnv.parseBoolean.bind(AutoEnv);
-export const parseNumber = AutoEnv.parseNumber.bind(AutoEnv);
-export const toSnakeCase = AutoEnv.toSnakeCase.bind(AutoEnv);
-export const coerceValue = AutoEnv.coerceValue.bind(AutoEnv);
-export const loadNestedFromEnv = AutoEnv.loadNestedFromEnv.bind(AutoEnv);
+// Utility functions removed from named exports.
+// Advanced users can access them via AutoEnv.* methods:
+// - AutoEnv.parseBoolean()
+// - AutoEnv.parseNumber()
+// - AutoEnv.toSnakeCase()
+// - AutoEnv.coerceValue()
+// - AutoEnv.loadNestedFromEnv()
