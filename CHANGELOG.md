@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-12-10
+
+### Fixed
+- **CommonJS/ESM dual-package exports** (#14) - Fixed package.json exports configuration to properly support both CommonJS and ESM
+  - `main` now points to `./dist/index.cjs` (CommonJS entry)
+  - `module` now points to `./dist/index.js` (ESM entry)
+  - `exports.require` now points to `./dist/index.cjs`
+  - `exports.import` now points to `./dist/index.js`
+  - This fixes compatibility with CommonJS projects (like MSR) that use `require()`
+
 ## [1.1.0] - 2025-12-10
 
 ### BREAKING CHANGES
@@ -86,5 +96,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `toSnakeCase()` - Convert camelCase to snake_case
 - `coerceValue()` - Type coercion utility
 
+[1.1.1]: https://github.com/vlavrynovych/auto-envparse/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/vlavrynovych/auto-envparse/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/vlavrynovych/auto-envparse/releases/tag/v1.0.0

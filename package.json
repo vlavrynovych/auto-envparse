@@ -1,16 +1,16 @@
 {
   "name": "auto-envparse",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Automatic environment variable parsing with zero configuration and type inference",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "default": "./dist/index.js"
     },
     "./package.json": "./package.json"

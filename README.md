@@ -302,6 +302,22 @@ const port: number = config.port;
 const ssl: boolean = config.ssl;
 ```
 
+### Dual Package Support
+
+auto-envparse supports both CommonJS and ESM:
+
+```typescript
+// ESM (import)
+import parseEnv from 'auto-envparse';
+import { enumValidator, createFrom } from 'auto-envparse';
+
+// CommonJS (require)
+const parseEnv = require('auto-envparse').default;
+const { enumValidator, createFrom } = require('auto-envparse');
+```
+
+Works seamlessly in both module systems!
+
 ---
 
 ## 🔧 How It Works
