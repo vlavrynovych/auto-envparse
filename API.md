@@ -1,784 +1,259 @@
 # API Documentation
 
-Complete API reference for auto-envparse.
+Complete API reference for auto-envparse v2.0.
 
 ## Table of Contents
 
-- [Default Export: parseEnv()](#default-export-parseenv)
-- [Named Exports](#named-exports)
+- [Exports](#exports)
+- [AutoEnvParse Class](#autoenvparse-class)
   - [parse()](#parse)
-  - [createFrom()](#createfrom)
   - [enumValidator()](#enumvalidator)
-  - [AutoEnv Class](#autoenv-class)
+  - [Utility Methods](#utility-methods)
+- [Best Practices](#best-practices)
+- [Error Handling](#error-handling)
+- [Migration from v1.x](#migration-from-v1x)
+- [Complete Example](#complete-example)
 
 ---
 
-## Default Export: parseEnv()
+## Exports
 
-The main entry point for auto-envparse.
+auto-envparse provides a single class export with two methods you'll commonly use.
 
-### Signature
+### Named Export
 
 ```typescript
-function parseEnv<T extends object>(
-    target: T,
-    prefix?: string,
-    overrides?: Map<string, (target: T, envVarName: string) => void>
-): void
+import { AutoEnvParse } from 'auto-envparse';
+
+AutoEnvParse.parse(config, 'DB');
 ```
 
-### Parameters
-
-- **target**: `T extends object`
-  - The configuration object to populate from environment variables
-  - Modified in-place
-  - Type: Any object with properties
-
-- **prefix**: `string` *(optional)*
-  - Environment variable prefix (e.g., `'DB'`, `'APP'`, `'REDIS'`)
-  - Used to generate env var names: `PREFIX_PROPERTY_NAME`
-  - Case-insensitive (will be uppercased automatically)
-  - **Default**: `''` (empty string - no prefix)
-  - When omitted, environment variables are used without a prefix (e.g., `HOST`, `PORT`)
-
-- **overrides**: `Map<string, (target: T, envVarName: string) => void>` *(optional)*
-  - Custom parsers for specific properties
-  - Map keys are property names (camelCase)
-  - Map values are parser functions that receive:
-    - `target`: The configuration object
-    - `envVarName`: The computed environment variable name
-
-### Returns
-
-`void` - The function modifies the target object in-place.
-
-### Example with Prefix
+### Default Export
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import AEP from 'auto-envparse';
 
-const config = {
-    host: 'localhost',
-    port: 5432,
-    ssl: false
-};
-
-// Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
-parseEnv(config, 'DB');
-
-console.log(config);
-// {
-//   host: 'example.com',
-//   port: 3306,
-//   ssl: true
-// }
-```
-
-### Example without Prefix
-
-```typescript
-import parseEnv from 'auto-envparse';
-
-const config = {
-    host: 'localhost',
-    port: 3000,
-    nodeEnv: 'development'
-};
-
-// Environment: HOST=production.com, PORT=8080, NODE_ENV=production
-parseEnv(config);
-
-console.log(config);
-// {
-//   host: 'production.com',
-//   port: 8080,
-//   nodeEnv: 'production'
-// }
-```
-
-### With Overrides
-
-```typescript
-import parseEnv from 'auto-envparse';
-
-const config = {
-    port: 3000,
-    environment: 'development'
-};
-
-const overrides = new Map();
-
-overrides.set('environment', (obj, envVar) => {
-    const value = process.env[envVar];
-    const validEnvs = ['development', 'staging', 'production'];
-
-    if (value && validEnvs.includes(value)) {
-        obj.environment = value;
-    } else {
-        throw new Error(`Invalid environment: ${value}`);
-    }
-});
-
-parseEnv(config, 'APP', overrides);
+AEP.parse(config, 'DB');
 ```
 
 ---
 
-## Named Exports
+## AutoEnvParse Class
+
+The main class containing all parsing functionality.
 
 ### parse()
 
-Alias for the default `parseEnv` function. Useful if you prefer the `parse` naming.
+Unified method that handles both plain objects and class constructors. Uses TypeScript overloads to provide excellent type inference.
+
+#### Overload 1: Class Constructor
 
 ```typescript
-import { parse } from 'auto-envparse';
-
-// With prefix
-const config = { host: 'localhost', port: 5432 };
-parse(config, 'DB');
-
-// Without prefix
-const globalConfig = { nodeEnv: 'development', port: 3000 };
-parse(globalConfig);
-```
-
-**Note:** `parse` and `parseEnv` are the same function. Use whichever name you prefer.
-
----
-
-### createFrom()
-
-Convenience function to create and populate an instance from a class constructor.
-
-```typescript
-function createFrom<T extends { new(): object }>(
+static parse<T extends { new(): object }>(
     classConstructor: T,
     prefix?: string,
     overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
 ): InstanceType<T>
 ```
 
-Equivalent to `AutoEnv.createFrom()`. See [AutoEnv.createFrom()](#autoenvcreatefrom) for details.
+Creates a new instance from a class constructor and populates it with environment variables.
 
----
+**Parameters:**
+- **classConstructor**: `T extends { new(): object }`
+  - A class constructor function with default values
+  - Must be a class with a no-argument constructor
 
-### enumValidator()
+- **prefix**: `string` *(optional)*
+  - Environment variable prefix (e.g., `'DB'`, `'APP'`, `'REDIS'`)
+  - Must be uppercase letters and numbers only
+  - **Default**: `''` (empty string - no prefix)
 
-Create an enum validator for use with overrides.
+- **overrides**: `Map<string, (target: InstanceType<T>, envVarName: string) => void>` *(optional)*
+  - Custom parsers for specific properties
+  - Map keys are property names (camelCase)
+  - Map values are validator/parser functions
 
-```typescript
-function enumValidator<T extends object>(
-    propertyKey: string,
-    allowedValues: string[],
-    options?: { caseSensitive?: boolean }
-): (target: T, envVarName: string) => void
-```
-
-Provides a convenient way to validate environment variable values against allowed enum values.
-
-**Quick Example:**
-
-```typescript
-import parseEnv, { enumValidator } from 'auto-envparse';
-
-const config = { environment: 'development' };
-const overrides = new Map();
-
-overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
-
-parseEnv(config, 'APP', overrides);
-```
-
-Equivalent to `AutoEnv.enumValidator()`. See [AutoEnv.enumValidator()](#autoenvenvvalidator) for complete details and options.
-
----
-
-### AutoEnv Class
-
-The core class that provides all parsing functionality.
-
-#### AutoEnv.parse()
-
-Same as the default export `parseEnv()` function.
-
-```typescript
-class AutoEnv {
-    static parse<T extends object>(
-        target: T,
-        prefix?: string,
-        overrides?: Map<string, (target: T, envVarName: string) => void>
-    ): void;
-}
-```
+**Returns:** `InstanceType<T>` - A new instance of the class with environment variables applied
 
 **Example:**
 
 ```typescript
-import { AutoEnv } from 'auto-envparse';
-
-// With prefix
-const config = { host: 'localhost', port: 5432 };
-AutoEnv.parse(config, 'DB');
-
-// Without prefix
-const simpleConfig = { host: 'localhost', port: 3000 };
-AutoEnv.parse(simpleConfig);
-```
-
----
-
-#### AutoEnv.loadNestedFromEnv()
-
-Load a nested object from dot-notation environment variables.
-
-```typescript
-class AutoEnv {
-    static loadNestedFromEnv<T extends Record<string, any>>(
-        prefix?: string,
-        defaultValue: T
-    ): T;
-}
-```
-
-**Parameters:**
-
-- **prefix**: `string` *(optional)*
-  - Environment variable prefix (e.g., `'APP_LOGGING'`)
-  - Used to look for env vars: `PREFIX_KEY`
-  - **Default**: `''` (empty string - no prefix)
-  - When omitted, looks for env vars without prefix
-
-- **defaultValue**: `T extends Record<string, any>`
-  - Default object with property types
-  - Used for type inference
-
-**Returns:**
-
-`T` - New object with values from environment variables or defaults
-
-**Example with Prefix:**
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-// Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
-const loggingConfig = AutoEnv.loadNestedFromEnv('APP_LOGGING', {
-    enabled: false,
-    path: './logs',
-    maxFiles: 10
-});
-
-console.log(loggingConfig);
-// {
-//   enabled: true,
-//   path: './logs',
-//   maxFiles: 20
-// }
-```
-
-**Example without Prefix:**
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-// Environment: ENABLED=true, MAX_CONNECTIONS=50
-const serverConfig = AutoEnv.loadNestedFromEnv('', {
-    enabled: false,
-    maxConnections: 10,
-    timeout: 5000
-});
-
-console.log(serverConfig);
-// {
-//   enabled: true,
-//   maxConnections: 50,
-//   timeout: 5000
-// }
-```
-
----
-
-#### AutoEnv.createFrom()
-
-Create and populate an instance from a class constructor.
-
-```typescript
-class AutoEnv {
-    static createFrom<T extends { new(): object }>(
-        classConstructor: T,
-        prefix?: string,
-        overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
-    ): InstanceType<T>;
-}
-```
-
-**Parameters:**
-
-- **classConstructor**: `T extends { new(): object }`
-  - Class constructor function with default values
-  - Must have a parameterless constructor
-  - Properties should have default values defined
-
-- **prefix**: `string` *(optional)*
-  - Environment variable prefix (e.g., `'DB'`, `'APP'`)
-  - **Default**: `''` (empty string - no prefix)
-  - When omitted, looks for env vars without prefix
-
-- **overrides**: `Map<string, (target: InstanceType<T>, envVarName: string) => void>` *(optional)*
-  - Custom parsers for specific properties
-  - Same as `parse()` overrides
-
-**Returns:**
-
-`InstanceType<T>` - New instance of the class populated from environment variables
-
-**Example with Prefix:**
-
-```typescript
-import { createFrom } from 'auto-envparse';
+import { AutoEnvParse } from 'auto-envparse';
 
 class DatabaseConfig {
     host = 'localhost';
     port = 5432;
     ssl = false;
-    poolSize = 10;
+
+    getConnectionString(): string {
+        return `${this.host}:${this.port}`;
+    }
 }
 
 // Environment: DB_HOST=prod.example.com, DB_PORT=5433, DB_SSL=true
-const config = createFrom(DatabaseConfig, 'DB');
+const config = AutoEnvParse.parse(DatabaseConfig, 'DB');
 
-console.log(config);
-// DatabaseConfig {
-//   host: 'prod.example.com',
-//   port: 5433,
-//   ssl: true,
-//   poolSize: 10
-// }
+console.log(config.host);                    // 'prod.example.com'
+console.log(config.getConnectionString());   // 'prod.example.com:5433'
+console.log(config instanceof DatabaseConfig); // true
 ```
 
-**Example without Prefix:**
+#### Overload 2: Plain Object
 
 ```typescript
-import { createFrom } from 'auto-envparse';
-
-class AppConfig {
-    nodeEnv = 'development';
-    port = 3000;
-    debug = false;
-}
-
-// Environment: NODE_ENV=production, PORT=8080, DEBUG=true
-const config = createFrom(AppConfig);
-
-console.log(config);
-// AppConfig {
-//   nodeEnv: 'production',
-//   port: 8080,
-//   debug: true
-// }
-```
-
-**Example with Methods:**
-
-```typescript
-import { createFrom } from 'auto-envparse';
-
-class ServerConfig {
-    host = '0.0.0.0';
-    port = 3000;
-
-    getUrl(): string {
-        return `http://${this.host}:${this.port}`;
-    }
-}
-
-// Environment: SERVER_HOST=example.com, SERVER_PORT=8080
-const config = createFrom(ServerConfig, 'SERVER');
-
-console.log(config.getUrl()); // 'http://example.com:8080'
-```
-
-**Example with Overrides:**
-
-```typescript
-import { createFrom } from 'auto-envparse';
-
-class ApiConfig {
-    port = 3000;
-    environment = 'development';
-}
-
-const overrides = new Map();
-overrides.set('environment', (obj, envVar) => {
-    const value = process.env[envVar];
-    const validEnvs = ['development', 'staging', 'production'];
-    if (value && validEnvs.includes(value)) {
-        obj.environment = value;
-    } else {
-        throw new Error(`Invalid environment: ${value}`);
-    }
-});
-
-const config = createFrom(ApiConfig, 'API', overrides);
-```
-
-**Use Cases:**
-
-- **Existing codebases** - You already have classes with defaults defined
-- **Less boilerplate** - No need to manually instantiate then parse
-- **Type safety** - Returns properly typed class instance
-- **MSR-style projects** - Projects using class-based configuration
-
----
-
-#### AutoEnv.coerceValue()
-
-Convert a string value to the specified type.
-
-```typescript
-class AutoEnv {
-    static coerceValue(
-        value: string,
-        type: string
-    ): string | number | boolean;
-}
-```
-
-**Parameters:**
-
-- **value**: `string` - String value from environment variable
-- **type**: `string` - Target type (`'boolean'`, `'number'`, `'string'`)
-
-**Returns:**
-
-`string | number | boolean` - Coerced value
-
-**Example:**
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-AutoEnv.coerceValue('42', 'number');    // 42
-AutoEnv.coerceValue('true', 'boolean'); // true
-AutoEnv.coerceValue('hello', 'string'); // 'hello'
-```
-
----
-
-#### AutoEnv.parseBoolean()
-
-Parse a string to boolean.
-
-```typescript
-class AutoEnv {
-    static parseBoolean(value: string): boolean;
-}
-```
-
-**Parameters:**
-
-- **value**: `string` - String value to parse
-
-**Returns:**
-
-`boolean` - Parsed boolean value
-
-**Truthy values** (case-insensitive):
-- `'true'`, `'1'`, `'yes'`, `'on'`
-
-**Falsy values**:
-- Everything else
-
-**Example:**
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-AutoEnv.parseBoolean('true');   // true
-AutoEnv.parseBoolean('TRUE');   // true
-AutoEnv.parseBoolean('1');      // true
-AutoEnv.parseBoolean('yes');    // true
-AutoEnv.parseBoolean('false');  // false
-AutoEnv.parseBoolean('0');      // false
-AutoEnv.parseBoolean('random'); // false
-```
-
----
-
-#### AutoEnv.parseNumber()
-
-Parse a string to number.
-
-```typescript
-class AutoEnv {
-    static parseNumber(value: string): number;
-}
-```
-
-**Parameters:**
-
-- **value**: `string` - String value to parse
-
-**Returns:**
-
-`number` - Parsed number or `NaN` if invalid
-
-**Example:**
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-AutoEnv.parseNumber('42');      // 42
-AutoEnv.parseNumber('3.14');    // 3.14
-AutoEnv.parseNumber('-10');     // -10
-AutoEnv.parseNumber('invalid'); // NaN
-```
-
----
-
-#### AutoEnv.enumValidator()
-
-Create an enum validator for use with overrides.
-
-```typescript
-class AutoEnv {
-    static enumValidator<T extends object>(
-        propertyKey: string,
-        allowedValues: string[],
-        options?: { caseSensitive?: boolean }
-    ): (target: T, envVarName: string) => void;
-}
-```
-
-**Parameters:**
-
-- **propertyKey**: `string`
-  - The property key to validate (must match the key in overrides Map)
-  - Used to set the correct property on the target object
-
-- **allowedValues**: `string[]`
-  - Array of valid enum values
-  - Environment variable must match one of these values
-
-- **options**: `{ caseSensitive?: boolean }` *(optional)*
-  - `caseSensitive`: Whether to perform case-sensitive matching (default: `true`)
-  - When `false`, accepts any case but uses original case from `allowedValues`
-
-**Returns:**
-
-`(target: T, envVarName: string) => void` - Override function for use with `parse()`
-
-**Throws:**
-
-- Error if environment variable value is not in `allowedValues`
-
-**Example:**
-
-```typescript
-import parseEnv, { enumValidator } from 'auto-envparse';
-
-type Environment = 'development' | 'staging' | 'production';
-
-const config = {
-    environment: 'development' as Environment
-};
-
-const overrides = new Map();
-overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
-
-parseEnv(config, 'APP', overrides);
-
-// ✅ Valid: APP_ENVIRONMENT=production
-// ❌ Invalid: APP_ENVIRONMENT=test (throws error)
-```
-
-**Case-Insensitive Example:**
-
-```typescript
-const config = {
-    logLevel: 'INFO'
-};
-
-const overrides = new Map();
-overrides.set('logLevel', enumValidator('logLevel', ['DEBUG', 'INFO', 'WARN', 'ERROR'], { caseSensitive: false }));
-
-// Environment: APP_LOG_LEVEL=debug
-parseEnv(config, 'APP', overrides);
-
-// Result: config.logLevel === 'DEBUG' (uses original case)
-```
-
-**Multiple Enums:**
-
-```typescript
-type Environment = 'development' | 'staging' | 'production';
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-
-const config = {
-    environment: 'development' as Environment,
-    logLevel: 'info' as LogLevel
-};
-
-const overrides = new Map();
-overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
-overrides.set('logLevel', enumValidator('logLevel', ['debug', 'info', 'warn', 'error']));
-
-parseEnv(config, 'APP', overrides);
-```
-
-**Convenience Export:**
-
-```typescript
-// Also available as named export for convenience
-import { enumValidator } from 'auto-envparse';
-
-// Equivalent to AutoEnv.enumValidator()
-overrides.set('status', enumValidator('status', ['active', 'inactive']));
-```
-
----
-
-#### AutoEnv.toSnakeCase()
-
-Convert camelCase to snake_case.
-
-```typescript
-class AutoEnv {
-    static toSnakeCase(str: string): string;
-}
-```
-
-**Parameters:**
-
-- **str**: `string` - camelCase string
-
-**Returns:**
-
-`string` - snake_case string
-
-**Example:**
-
-```typescript
-import { AutoEnv } from 'auto-envparse';
-
-AutoEnv.toSnakeCase('poolSize');         // 'pool_size'
-AutoEnv.toSnakeCase('maxRetries');       // 'max_retries'
-AutoEnv.toSnakeCase('connectionTimeout'); // 'connection_timeout'
-AutoEnv.toSnakeCase('host');             // 'host'
-```
-
----
-
-## Type Coercion Details
-
-### Supported Types
-
-| Type | Detection | Conversion |
-|------|-----------|------------|
-| `string` | `typeof value === 'string'` | No conversion |
-| `number` | `typeof value === 'number'` | `parseFloat(envVar)` |
-| `boolean` | `typeof value === 'boolean'` | See [Boolean Parsing](#boolean-parsing) |
-| `null` | `value === null` | Treated as string |
-| `undefined` | `value === undefined` | Treated as string |
-| `array` | `Array.isArray(value)` | `JSON.parse(envVar)` |
-| `object` | `typeof value === 'object'` | Nested parsing |
-
-### Boolean Parsing
-
-Boolean parsing is case-insensitive and supports multiple formats:
-
-| Input | Result |
-|-------|--------|
-| `'true'`, `'TRUE'` | `true` |
-| `'1'` | `true` |
-| `'yes'`, `'YES'` | `true` |
-| `'on'`, `'ON'` | `true` |
-| `'false'`, `'FALSE'` | `false` |
-| `'0'` | `false` |
-| `'no'`, `'NO'` | `false` |
-| `'off'`, `'OFF'` | `false` |
-| Any other value | `false` |
-
-### Array Parsing
-
-Arrays expect JSON format in environment variables:
-
-```bash
-# String array
-export APP_TAGS='["tag1", "tag2", "tag3"]'
-
-# Number array
-export APP_NUMBERS='[1, 2, 3, 4, 5]'
-
-# Mixed array
-export APP_MIXED='["string", 42, true]'
-```
-
-**Code:**
-
-```typescript
-const config = {
-    tags: ['default'],
-    numbers: [0]
-};
-
-parse(config, 'APP');
-
-console.log(config.tags);    // ['tag1', 'tag2', 'tag3']
-console.log(config.numbers); // [1, 2, 3, 4, 5]
-```
-
-### Nested Object Parsing
-
-Nested objects support two formats:
-
-1. **Dot-notation** (recommended):
-
-```bash
-export DB_POOL_MIN=5
-export DB_POOL_MAX=50
-export DB_POOL_IDLE_TIMEOUT=30000
-```
-
-2. **JSON format**:
-
-```bash
-export DB_POOL='{"min": 5, "max": 50, "idleTimeout": 30000}'
-```
-
-**Note:** Dot-notation takes precedence over JSON format.
-
----
-
-## Custom Overrides
-
-Custom overrides allow you to add validation, transformation, or complex parsing logic for specific properties.
-
-### Override Function Signature
-
-```typescript
-type OverrideFunction<T> = (
+static parse<T extends object>(
     target: T,
-    envVarName: string
-) => void
+    prefix?: string,
+    overrides?: Map<string, (target: T, envVarName: string) => void>
+): T
 ```
 
-### Parameters
+Populates a plain object with environment variables.
 
-- **target**: `T` - The configuration object (modify in-place)
-- **envVarName**: `string` - The computed environment variable name
+**Parameters:**
+- **target**: `T extends object`
+  - The configuration object to populate
+  - Modified in-place and also returned
+  - Can be any plain object
 
-### Example: Port Validation
+- **prefix**: `string` *(optional)*
+  - Environment variable prefix (e.g., `'DB'`, `'APP'`, `'REDIS'`)
+  - Must be uppercase letters and numbers only
+  - **Default**: `''` (empty string - no prefix)
+
+- **overrides**: `Map<string, (target: T, envVarName: string) => void>` *(optional)*
+  - Custom parsers for specific properties
+
+**Returns:** `T` - The same object that was passed in (modified in-place)
+
+**Example:**
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import { AutoEnvParse } from 'auto-envparse';
 
 const config = {
-    port: 3000
+    host: 'localhost',
+    port: 5432,
+    ssl: false,
+    timeout: 30000
+};
+
+// Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
+const result = AutoEnvParse.parse(config, 'DB');
+
+console.log(result === config);  // true (same object)
+console.log(config.host);        // 'example.com'
+console.log(config.port);        // 3306
+console.log(config.ssl);         // true
+console.log(config.timeout);     // 30000 (unchanged - no DB_TIMEOUT set)
+```
+
+#### Environment Variable Naming
+
+Property names are automatically converted from camelCase to SNAKE_CASE:
+
+```typescript
+const config = {
+    apiUrl: 'http://localhost',
+    maxRetries: 3,
+    poolSize: 10,
+    HTTPSEnabled: false
+};
+
+AutoEnvParse.parse(config, 'APP');
+
+// Looks for environment variables:
+// APP_API_URL
+// APP_MAX_RETRIES
+// APP_POOL_SIZE
+// APP_HTTPS_ENABLED
+```
+
+#### Type Coercion
+
+Values are automatically coerced based on the default value type:
+
+| Default Type | Env Var Value | Result | Coerced Type |
+|--------------|---------------|--------|--------------|
+| `'localhost'` | `'example.com'` | `'example.com'` | `string` |
+| `5432` | `'3306'` | `3306` | `number` |
+| `false` | `'true'` | `true` | `boolean` |
+| `['a']` | `'["x","y"]'` | `['x', 'y']` | `array` |
+| `{ host: 'localhost' }` | `'{"host":"example.com"}'` | `{ host: 'example.com' }` | `object` |
+
+**Boolean parsing** (case-insensitive):
+- **Truthy**: `'true'`, `'1'`, `'yes'`, `'on'`
+- **Falsy**: Everything else
+
+**Array parsing**: Expects JSON format: `'["item1", "item2"]'`
+
+**Object parsing**: Supports both JSON and dot-notation:
+```typescript
+// JSON format
+APP_DATABASE='{"host":"example.com","port":5432}'
+
+// Dot-notation
+APP_DATABASE_HOST='example.com'
+APP_DATABASE_PORT='5432'
+```
+
+#### Nested Objects
+
+Supports deeply nested object structures with dot-notation:
+
+```typescript
+const config = {
+    database: {
+        host: 'localhost',
+        port: 5432,
+        pool: {
+            min: 2,
+            max: 10
+        }
+    }
+};
+
+// Environment variables:
+// APP_DATABASE_HOST=prod.example.com
+// APP_DATABASE_PORT=5433
+// APP_DATABASE_POOL_MIN=5
+// APP_DATABASE_POOL_MAX=20
+AutoEnvParse.parse(config, 'APP');
+
+console.log(config.database.host);      // 'prod.example.com'
+console.log(config.database.pool.min);  // 5
+```
+
+#### Without Prefix
+
+Omit the prefix parameter to use global environment variables:
+
+```typescript
+const config = {
+    host: 'localhost',
+    port: 3000,
+    nodeEnv: 'development'
+};
+
+// Environment variables: HOST, PORT, NODE_ENV
+AutoEnvParse.parse(config);
+
+console.log(config.nodeEnv); // Uses NODE_ENV directly
+```
+
+#### With Custom Overrides
+
+Add custom validation or parsing logic for specific properties:
+
+```typescript
+const config = {
+    port: 3000,
+    timeout: 5000
 };
 
 const overrides = new Map();
 
+// Custom port validation
 overrides.set('port', (obj, envVar) => {
     const value = process.env[envVar];
     if (value) {
@@ -786,18 +261,61 @@ overrides.set('port', (obj, envVar) => {
         if (port >= 1 && port <= 65535) {
             obj.port = port;
         } else {
-            throw new Error(`Port must be between 1 and 65535, got: ${port}`);
+            throw new Error(`Port must be between 1-65535, got: ${port}`);
         }
     }
 });
 
-parseEnv(config, 'APP', overrides);
+// Custom timeout with minimum value
+overrides.set('timeout', (obj, envVar) => {
+    const value = process.env[envVar];
+    if (value) {
+        const timeout = parseInt(value, 10);
+        obj.timeout = Math.max(timeout, 1000); // Minimum 1 second
+    }
+});
+
+AutoEnvParse.parse(config, 'APP', overrides);
 ```
 
-### Example: Enum Validation
+---
+
+### enumValidator()
+
+Creates a validator function for enum-like values. Perfect for validating environment variables that must be one of a specific set of values.
+
+#### Signature
 
 ```typescript
-import parseEnv from 'auto-envparse';
+static enumValidator<T extends object>(
+    propertyKey: string,
+    allowedValues: string[],
+    options?: { caseSensitive?: boolean }
+): (target: T, envVarName: string) => void
+```
+
+#### Parameters
+
+- **propertyKey**: `string`
+  - The property name to validate
+  - Must match the key in the config object
+
+- **allowedValues**: `string[]`
+  - Array of valid enum values
+  - If the env var value is not in this list, throws an error
+
+- **options**: `{ caseSensitive?: boolean }` *(optional)*
+  - **caseSensitive**: `boolean` - Whether validation is case-sensitive
+  - **Default**: `true`
+
+#### Returns
+
+A validator function for use with the `overrides` parameter in `parse()`.
+
+#### Example: Single Enum Field
+
+```typescript
+import { AutoEnvParse } from 'auto-envparse';
 
 type Environment = 'development' | 'staging' | 'production';
 
@@ -806,331 +324,410 @@ const config = {
 };
 
 const overrides = new Map();
+overrides.set('environment',
+    AutoEnvParse.enumValidator('environment', ['development', 'staging', 'production'])
+);
 
-overrides.set('environment', (obj, envVar) => {
-    const value = process.env[envVar];
-    const validEnvs: Environment[] = ['development', 'staging', 'production'];
+// Environment: APP_ENVIRONMENT=production
+AutoEnvParse.parse(config, 'APP', overrides);
 
-    if (value && validEnvs.includes(value as Environment)) {
-        obj.environment = value as Environment;
-    } else if (value) {
-        throw new Error(`Invalid environment: ${value}. Must be one of: ${validEnvs.join(', ')}`);
-    }
-});
+console.log(config.environment); // 'production'
 
-parseEnv(config, 'APP', overrides);
+// If APP_ENVIRONMENT=invalid, throws:
+// Error: Invalid value for APP_ENVIRONMENT: "invalid". Must be one of: development, staging, production
 ```
 
-### Example: Complex Transformation
+#### Example: Multiple Enum Fields
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import { AutoEnvParse } from 'auto-envparse';
 
 const config = {
-    allowedOrigins: ['http://localhost:3000']
+    env: 'dev',
+    log: 'info',
+    region: 'us-east-1',
+    protocol: 'https'
+};
+
+// Compact initialization for multiple enum fields
+const overrides = new Map([
+    ['env', AutoEnvParse.enumValidator('env', ['dev', 'staging', 'prod'])],
+    ['log', AutoEnvParse.enumValidator('log', ['debug', 'info', 'warn', 'error'])],
+    ['region', AutoEnvParse.enumValidator('region', ['us-east-1', 'us-west-2', 'eu-west-1'])],
+    ['protocol', AutoEnvParse.enumValidator('protocol', ['http', 'https'])],
+]);
+
+AutoEnvParse.parse(config, 'APP', overrides);
+```
+
+#### Example: Case-Insensitive Validation
+
+```typescript
+const config = {
+    logLevel: 'info'
 };
 
 const overrides = new Map();
+overrides.set('logLevel',
+    AutoEnvParse.enumValidator('logLevel', ['debug', 'info', 'warn', 'error'], {
+        caseSensitive: false
+    })
+);
 
-overrides.set('allowedOrigins', (obj, envVar) => {
-    const value = process.env[envVar];
-    if (value) {
-        // Support both comma-separated and JSON array formats
-        if (value.startsWith('[')) {
-            obj.allowedOrigins = JSON.parse(value);
-        } else {
-            obj.allowedOrigins = value.split(',').map(s => s.trim());
-        }
-    }
-});
+// Environment: APP_LOG_LEVEL=DEBUG (any case works)
+AutoEnvParse.parse(config, 'APP', overrides);
 
-parseEnv(config, 'APP', overrides);
-
-// Supports both:
-// APP_ALLOWED_ORIGINS='["https://example.com", "https://app.example.com"]'
-// APP_ALLOWED_ORIGINS='https://example.com, https://app.example.com'
+console.log(config.logLevel); // 'debug' (normalized to lowercase from allowedValues)
 ```
 
 ---
 
-## Error Handling
+## Utility Methods
 
-auto-envparse does not throw errors by default for missing environment variables or invalid values. It follows a "fail-silent" approach, preserving default values when:
+The following methods are available on the `AutoEnvParse` class for advanced use cases. These are typically not needed for normal usage but can be useful for custom parsing logic.
 
-- Environment variable is not set
-- Environment variable is empty string
-- Type coercion fails (e.g., `NaN` for invalid numbers)
+### parseBoolean()
 
-To add validation and error handling, use [custom overrides](#custom-overrides).
-
----
-
-## TypeScript Types
-
-### Generic Constraints
+Parse a string to boolean with flexible truthy/falsy values.
 
 ```typescript
-// parseEnv() accepts any object
-function parseEnv<T extends object>(target: T, ...): void
+static parseBoolean(value: string, strict?: boolean): boolean
+```
 
-// loadNestedFromEnv() accepts record-like objects
-function loadNestedFromEnv<T extends Record<string, any>>(
-    prefix: string,
+**Parameters:**
+- **value**: `string` - The string value to parse
+- **strict**: `boolean` *(optional)* - If true, warns on unrecognized values. Default: `false`
+
+**Truthy values** (case-insensitive): `'true'`, `'1'`, `'yes'`, `'on'`
+**Falsy values** (case-insensitive): `'false'`, `'0'`, `'no'`, `'off'`
+**Other values**: Return `false` (with optional warning in strict mode)
+
+**Example:**
+
+```typescript
+AutoEnvParse.parseBoolean('true');   // true
+AutoEnvParse.parseBoolean('YES');    // true
+AutoEnvParse.parseBoolean('false');  // false
+AutoEnvParse.parseBoolean('0');      // false
+AutoEnvParse.parseBoolean('maybe');  // false
+```
+
+### parseNumber()
+
+Parse a string to number.
+
+```typescript
+static parseNumber(value: string): number
+```
+
+Uses `parseFloat()` internally. Returns `NaN` if the value cannot be parsed.
+
+**Example:**
+
+```typescript
+AutoEnvParse.parseNumber('42');       // 42
+AutoEnvParse.parseNumber('3.14');     // 3.14
+AutoEnvParse.parseNumber('invalid');  // NaN
+```
+
+### toSnakeCase()
+
+Convert camelCase strings to snake_case.
+
+```typescript
+static toSnakeCase(str: string): string
+```
+
+Handles consecutive capitals properly (e.g., `'HTTPSPort'` → `'https_port'`).
+
+**Example:**
+
+```typescript
+AutoEnvParse.toSnakeCase('poolSize');      // 'pool_size'
+AutoEnvParse.toSnakeCase('maxRetries');    // 'max_retries'
+AutoEnvParse.toSnakeCase('APIKey');        // 'api_key'
+AutoEnvParse.toSnakeCase('HTTPSPort');     // 'https_port'
+```
+
+### coerceValue()
+
+Coerce a string value to the specified type.
+
+```typescript
+static coerceValue(value: string, type: string): string | number | boolean
+```
+
+**Parameters:**
+- **value**: `string` - The string value to coerce
+- **type**: `string` - Target type: `'boolean'`, `'number'`, or `'string'`
+
+**Example:**
+
+```typescript
+AutoEnvParse.coerceValue('true', 'boolean');   // true
+AutoEnvParse.coerceValue('42', 'number');      // 42
+AutoEnvParse.coerceValue('hello', 'string');   // 'hello'
+```
+
+### loadNestedFromEnv()
+
+Load a nested object structure from dot-notation environment variables.
+
+```typescript
+static loadNestedFromEnv<T extends Record<string, any>>(
+    prefix?: string,
     defaultValue: T
 ): T
 ```
 
-### Type Safety
+**Parameters:**
+- **prefix**: `string` *(optional)* - Environment variable prefix
+- **defaultValue**: `T` - Default object structure (will be deep cloned)
 
-auto-envparse preserves TypeScript types:
+**Returns:** A new object with environment variables applied.
+
+**Example:**
 
 ```typescript
-interface DatabaseConfig {
-    host: string;
-    port: number;
-    ssl: boolean;
-    pool: {
-        min: number;
-        max: number;
-    };
-}
+// Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
+const config = AutoEnvParse.loadNestedFromEnv('APP_LOGGING', {
+    enabled: false,
+    path: './logs',
+    maxFiles: 10
+});
 
-const config: DatabaseConfig = {
-    host: 'localhost',
-    port: 5432,
-    ssl: false,
-    pool: {
-        min: 2,
-        max: 10
-    }
-};
-
-parseEnv(config, 'DB');
-
-// All types are preserved:
-const host: string = config.host;
-const port: number = config.port;
-const ssl: boolean = config.ssl;
-const poolMin: number = config.pool.min;
+console.log(config);
+// {
+//   enabled: true,
+//   path: './logs',
+//   maxFiles: 20
+// }
 ```
 
 ---
 
 ## Best Practices
 
-### 1. Define Sensible Defaults
-
-Always provide sensible default values in your config object. auto-envparse uses these for type inference.
+### 1. Use TypeScript for Type Safety
 
 ```typescript
-// ✅ Good
-const config = {
-    timeout: 5000,        // Clear default
-    retries: 3,           // Clear default
-    debug: false          // Clear default
-};
+interface DatabaseConfig {
+    host: string;
+    port: number;
+    ssl: boolean;
+}
 
-// ❌ Bad
-const config = {
-    timeout: 0,           // Unclear if 0 is valid
-    retries: undefined,   // No type information
-    debug: null           // No type information
-};
-```
-
-### 2. Use Consistent Prefixes
-
-Use consistent, descriptive prefixes for related configuration:
-
-```typescript
-// ✅ Good
-parseEnv(databaseConfig, 'DATABASE');
-parseEnv(redisConfig, 'REDIS');
-parseEnv(authConfig, 'AUTH');
-
-// ❌ Bad
-parseEnv(databaseConfig, 'DB');
-parseEnv(redisConfig, 'CACHE');
-parseEnv(authConfig, 'LOGIN');
-```
-
-### 3. Document Environment Variables
-
-Document all environment variables your application uses:
-
-```typescript
-/**
- * Database configuration
- *
- * Environment variables:
- * - DATABASE_HOST: Database host (default: localhost)
- * - DATABASE_PORT: Database port (default: 5432)
- * - DATABASE_SSL: Enable SSL (default: false)
- */
-const databaseConfig = {
+const config: DatabaseConfig = {
     host: 'localhost',
     port: 5432,
     ssl: false
 };
 
-parseEnv(databaseConfig, 'DATABASE');
+AutoEnvParse.parse(config, 'DB');
+
+// TypeScript ensures all properties are typed correctly
 ```
 
-### 4. Use Overrides for Validation
+### 2. Validate Enum Values
 
-Add validation for critical or sensitive configuration:
+Always validate environment variables that accept only specific values:
 
 ```typescript
-const overrides = new Map();
+const overrides = new Map([
+    ['environment', AutoEnvParse.enumValidator('environment', ['dev', 'staging', 'prod'])],
+]);
 
-// Validate port range
-overrides.set('port', (obj, envVar) => {
-    const value = process.env[envVar];
-    if (value) {
-        const port = parseInt(value, 10);
-        if (port < 1 || port > 65535) {
-            throw new Error(`Invalid port: ${port}`);
-        }
-        obj.port = port;
-    }
-});
-
-// Validate required fields
-overrides.set('apiKey', (obj, envVar) => {
-    const value = process.env[envVar];
-    if (!value) {
-        throw new Error(`${envVar} is required`);
-    }
-    obj.apiKey = value;
-});
+AutoEnvParse.parse(config, 'APP', overrides);
 ```
 
-### 5. Group Related Configuration
+### 3. Use Classes for Complex Configuration
 
-Group related configuration properties in nested objects:
+Classes provide better encapsulation and can include methods:
+
+```typescript
+class AppConfig {
+    host = '0.0.0.0';
+    port = 3000;
+
+    getUrl(): string {
+        return `http://${this.host}:${this.port}`;
+    }
+
+    isProduction(): boolean {
+        return process.env.NODE_ENV === 'production';
+    }
+}
+
+const config = AutoEnvParse.parse(AppConfig, 'APP');
+console.log(config.getUrl());
+```
+
+### 4. Provide Sensible Defaults
+
+Always provide default values in your configuration:
 
 ```typescript
 const config = {
-    server: {
-        port: 3000,
-        host: '0.0.0.0'
-    },
-    database: {
-        host: 'localhost',
-        port: 5432
-    },
-    redis: {
-        host: 'localhost',
-        port: 6379
-    }
+    host: 'localhost',          // Good default for local development
+    port: 3000,                 // Standard port
+    debug: false,               // Safe default
+    timeout: 30000,             // Reasonable timeout
+    retries: 3                  // Sensible retry count
 };
+```
 
-parseEnv(config, 'APP');
+### 5. Use Prefixes to Organize Variables
 
-// Environment variables:
-// APP_SERVER_PORT
-// APP_SERVER_HOST
-// APP_DATABASE_HOST
-// APP_DATABASE_PORT
-// APP_REDIS_HOST
-// APP_REDIS_PORT
+Group related environment variables with prefixes:
+
+```typescript
+// Database configuration
+const dbConfig = AutoEnvParse.parse({ host: 'localhost', port: 5432 }, 'DB');
+
+// Redis configuration
+const redisConfig = AutoEnvParse.parse({ host: 'localhost', port: 6379 }, 'REDIS');
+
+// App configuration
+const appConfig = AutoEnvParse.parse({ port: 3000, debug: false }, 'APP');
 ```
 
 ---
 
-## Migration from Other Libraries
+## Error Handling
 
-### From envalid
-
-**envalid:**
+### Invalid Prefix Format
 
 ```typescript
-import { cleanEnv, str, num, bool } from 'envalid';
-
-const config = cleanEnv(process.env, {
-    HOST: str({ default: 'localhost' }),
-    PORT: num({ default: 5432 }),
-    SSL: bool({ default: false })
-});
+// Throws: Error: Invalid prefix "db-app". Use uppercase letters and numbers only.
+AutoEnvParse.parse(config, 'db-app');
 ```
 
-**auto-envparse:**
+Prefixes must match: `/^[A-Z0-9]+$/`
+
+### Enum Validation Errors
 
 ```typescript
-import parseEnv from 'auto-envparse';
+const overrides = new Map([
+    ['env', AutoEnvParse.enumValidator('env', ['dev', 'prod'])],
+]);
 
+// Environment: APP_ENV=staging
+// Throws: Error: Invalid value for APP_ENV: "staging". Must be one of: dev, prod
+AutoEnvParse.parse(config, 'APP', overrides);
+```
+
+### Invalid JSON
+
+```typescript
 const config = {
-    host: 'localhost',
-    port: 5432,
-    ssl: false
+    data: { key: 'value' }
 };
 
-parseEnv(config, 'DB');
+// Environment: APP_DATA='invalid json'
+// Logs: Warning: Invalid APP_DATA JSON. Using dot-notation if available.
+// Falls back to dot-notation: APP_DATA_KEY
+AutoEnvParse.parse(config, 'APP');
 ```
 
-### From convict
+---
 
-**convict:**
+## Migration from v1.x
+
+### Import Changes
 
 ```typescript
-import convict from 'convict';
+// v1.x
+import parseEnv, { parse, createFrom, AutoEnv } from 'auto-envparse';
 
-const config = convict({
-    host: {
-        format: String,
-        default: 'localhost',
-        env: 'DB_HOST'
-    },
-    port: {
-        format: 'port',
-        default: 5432,
-        env: 'DB_PORT'
+// v2.0
+import { AutoEnvParse } from 'auto-envparse';
+// or
+import AEP from 'auto-envparse';
+```
+
+### Method Changes
+
+```typescript
+// v1.x - Multiple methods
+parseEnv(config, 'DB');
+const instance = createFrom(DbClass, 'DB');
+AutoEnv.parseBoolean('true');
+
+// v2.0 - Unified method
+AutoEnvParse.parse(config, 'DB');
+const instance = AutoEnvParse.parse(DbClass, 'DB');
+AutoEnvParse.parseBoolean('true');
+```
+
+### Return Value
+
+```typescript
+// v1.x - No return value
+const config = { host: 'localhost' };
+parseEnv(config, 'DB');
+console.log(config.host);
+
+// v2.0 - Returns the object
+const config = AutoEnvParse.parse({ host: 'localhost' }, 'DB');
+console.log(config.host);
+```
+
+---
+
+## Complete Example
+
+```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
+// Define configuration class
+class ApplicationConfig {
+    // Server settings
+    host = '0.0.0.0';
+    port = 3000;
+
+    // Database settings
+    database = {
+        host: 'localhost',
+        port: 5432,
+        name: 'myapp',
+        ssl: false
+    };
+
+    // Application settings
+    environment: 'development' | 'staging' | 'production' = 'development';
+    debug = false;
+    logLevel: 'debug' | 'info' | 'warn' | 'error' = 'info';
+
+    // Methods
+    getServerUrl(): string {
+        return `http://${this.host}:${this.port}`;
     }
-});
 
-config.validate();
-```
+    getDatabaseUrl(): string {
+        const protocol = this.database.ssl ? 'postgres' : 'postgresql';
+        return `${protocol}://${this.database.host}:${this.database.port}/${this.database.name}`;
+    }
+}
 
-**auto-envparse:**
+// Set up validators
+const overrides = new Map([
+    ['environment', AutoEnvParse.enumValidator('environment', ['development', 'staging', 'production'])],
+    ['logLevel', AutoEnvParse.enumValidator('logLevel', ['debug', 'info', 'warn', 'error'])],
+]);
 
-```typescript
-import parseEnv from 'auto-envparse';
+// Parse configuration
+const config = AutoEnvParse.parse(ApplicationConfig, 'APP', overrides);
 
-const config = {
-    host: 'localhost',
-    port: 5432
-};
+// Use configuration
+console.log('Server URL:', config.getServerUrl());
+console.log('Database URL:', config.getDatabaseUrl());
+console.log('Environment:', config.environment);
+console.log('Debug mode:', config.debug);
 
-parseEnv(config, 'DB');
-```
-
-### From dotenv
-
-**dotenv:**
-
-```typescript
-import dotenv from 'dotenv';
-dotenv.config();
-
-const config = {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432', 10),
-    ssl: process.env.DB_SSL === 'true'
-};
-```
-
-**auto-envparse:**
-
-```typescript
-import parseEnv from 'auto-envparse';
-
-const config = {
-    host: 'localhost',
-    port: 5432,
-    ssl: false
-};
-
-parseEnv(config, 'DB');
+// Environment variables used:
+// APP_HOST, APP_PORT
+// APP_DATABASE_HOST, APP_DATABASE_PORT, APP_DATABASE_NAME, APP_DATABASE_SSL
+// APP_ENVIRONMENT, APP_DEBUG, APP_LOG_LEVEL
 ```
 
 ---
