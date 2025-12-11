@@ -14,7 +14,7 @@
  * ```typescript
  * // Simple usage
  * const config = { host: 'localhost', port: 5432, ssl: false };
- * AutoEnv.parse(config, 'DB');
+ * AutoEnvParse.parse(config, 'DB');
  * // Applies: DB_HOST, DB_PORT, DB_SSL
  *
  * // With overrides
@@ -28,39 +28,90 @@
  *         }
  *     }
  * });
- * AutoEnv.parse(config, 'DB', overrides);
+ * AutoEnvParse.parse(config, 'DB', overrides);
  * ```
  */
-export class AutoEnv {
+export class AutoEnvParse {
     /**
-     * Parse environment variables and apply them to the target object.
+     * Parse environment variables and create an instance from a class constructor.
      *
-     * Uses reflection to discover properties and automatically applies environment variables
-     * based on naming convention and type coercion.
+     * @param classConstructor - Class constructor function with default values
+     * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
+     * @param overrides - Optional custom parsers for specific properties
+     * @returns New instance of the class populated from environment variables
+     *
+     * @example
+     * ```typescript
+     * class DbConfig { host = 'localhost'; port = 5432; }
+     * const config = AutoEnvParse.parse(DbConfig, 'DB');
+     * console.log(config.host); // Populated from DB_HOST env var
+     * ```
+     */
+    static parse<T extends { new(): object }>(
+        classConstructor: T,
+        prefix?: string,
+        overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
+    ): InstanceType<T>;
+
+    /**
+     * Parse environment variables and apply them to a plain object.
      *
      * @param target - Object to populate from environment variables
      * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
      * @param overrides - Optional custom parsers for specific properties
+     * @returns The populated object
      *
      * @example
      * ```typescript
-     * const config = {
-     *     host: 'localhost',
-     *     port: 5432,
-     *     ssl: false,
-     *     poolSize: 10
-     * };
-     *
-     * // With prefix - Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
-     * AutoEnv.parse(config, 'DB');
-     * // Result: { host: 'example.com', port: 3306, ssl: true, poolSize: 10 }
-     *
-     * // Without prefix - Environment: HOST=example.com, PORT=3306, SSL=true
-     * AutoEnv.parse(config);
-     * // Result: { host: 'example.com', port: 3306, ssl: true, poolSize: 10 }
+     * const config = AutoEnvParse.parse({ host: 'localhost', port: 5432 }, 'DB');
+     * console.log(config.host); // Populated from DB_HOST env var
      * ```
      */
     static parse<T extends object>(
+        target: T,
+        prefix?: string,
+        overrides?: Map<string, (target: T, envVarName: string) => void>
+    ): T;
+
+    /**
+     * Unified parse implementation that handles both objects and class constructors.
+     * Uses runtime type detection to determine the appropriate parsing strategy.
+     *
+     * @param targetOrClass - Either a plain object or a class constructor
+     * @param prefix - Optional environment variable prefix
+     * @param overrides - Optional custom parsers for specific properties
+     * @returns The populated object or class instance
+     */
+    static parse(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        targetOrClass: any,
+        prefix: string = '',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        overrides?: Map<string, any>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ): any {
+        // Runtime detection: is it a constructor function or a plain object?
+        if (typeof targetOrClass === 'function') {
+            // Class constructor path - create instance and parse it
+            const instance = new targetOrClass();
+            this.parseObject(instance, prefix, overrides);
+            return instance;
+        } else {
+            // Plain object path - parse and return it
+            this.parseObject(targetOrClass, prefix, overrides);
+            return targetOrClass;
+        }
+    }
+
+    /**
+     * Parse environment variables and apply them to the target object.
+     * This is an internal method that performs the actual parsing logic.
+     *
+     * @param target - Object to populate from environment variables
+     * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
+     * @param overrides - Optional custom parsers for specific properties
+     */
+    private static parseObject<T extends object>(
         target: T,
         prefix: string = '',
         overrides?: Map<string, (target: T, envVarName: string) => void>
@@ -140,7 +191,7 @@ export class AutoEnv {
      * }
      *
      * // Environment: DB_HOST=prod.example.com, DB_PORT=5433, DB_SSL=true
-     * const config = AutoEnv.createFrom(DatabaseConfig, 'DB');
+     * const config = AutoEnvParse.createFrom(DatabaseConfig, 'DB');
      * // config is instance of DatabaseConfig with env values applied
      * ```
      *
@@ -153,7 +204,7 @@ export class AutoEnv {
      * }
      *
      * // Environment: NODE_ENV=production, PORT=8080, DEBUG=true
-     * const config = AutoEnv.createFrom(AppConfig); // No prefix
+     * const config = AutoEnvParse.createFrom(AppConfig); // No prefix
      * ```
      */
     static createFrom<T extends { new(): object }>(
@@ -162,7 +213,7 @@ export class AutoEnv {
         overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
     ): InstanceType<T> {
         const instance = new classConstructor() as InstanceType<T>;
-        this.parse(instance, prefix, overrides);
+        this.parseObject(instance, prefix, overrides);
         return instance;
     }
 
@@ -358,7 +409,7 @@ export class AutoEnv {
      * @example
      * ```typescript
      * // With prefix - Environment: APP_LOGGING_ENABLED=true, APP_LOGGING_MAX_FILES=20
-     * const config = AutoEnv.loadNestedFromEnv('APP_LOGGING', {
+     * const config = AutoEnvParse.loadNestedFromEnv('APP_LOGGING', {
      *     enabled: false,
      *     path: './logs',
      *     maxFiles: 10
@@ -366,7 +417,7 @@ export class AutoEnv {
      * // Result: { enabled: true, path: './logs', maxFiles: 20 }
      *
      * // Without prefix - Environment: ENABLED=true, MAX_FILES=20
-     * const config = AutoEnv.loadNestedFromEnv('', {
+     * const config = AutoEnvParse.loadNestedFromEnv('', {
      *     enabled: false,
      *     path: './logs',
      *     maxFiles: 10
@@ -438,12 +489,12 @@ export class AutoEnv {
      *
      * @example
      * ```typescript
-     * AutoEnv.parseBoolean('true');   // true
-     * AutoEnv.parseBoolean('yes');    // true
-     * AutoEnv.parseBoolean('false');  // false
-     * AutoEnv.parseBoolean('no');     // false
-     * AutoEnv.parseBoolean('maybe');  // false (no warning by default)
-     * AutoEnv.parseBoolean('maybe', true);  // false (warns about unrecognized value)
+     * AutoEnvParse.parseBoolean('true');   // true
+     * AutoEnvParse.parseBoolean('yes');    // true
+     * AutoEnvParse.parseBoolean('false');  // false
+     * AutoEnvParse.parseBoolean('no');     // false
+     * AutoEnvParse.parseBoolean('maybe');  // false (no warning by default)
+     * AutoEnvParse.parseBoolean('maybe', true);  // false (warns about unrecognized value)
      * ```
      */
     static parseBoolean(value: string, strict = false): boolean {
@@ -490,11 +541,11 @@ export class AutoEnv {
      *
      * @example
      * ```typescript
-     * AutoEnv.toSnakeCase('poolSize');      // 'pool_size'
-     * AutoEnv.toSnakeCase('maxRetries');    // 'max_retries'
-     * AutoEnv.toSnakeCase('host');          // 'host'
-     * AutoEnv.toSnakeCase('APIKey');        // 'api_key'
-     * AutoEnv.toSnakeCase('HTTPSPort');     // 'https_port'
+     * AutoEnvParse.toSnakeCase('poolSize');      // 'pool_size'
+     * AutoEnvParse.toSnakeCase('maxRetries');    // 'max_retries'
+     * AutoEnvParse.toSnakeCase('host');          // 'host'
+     * AutoEnvParse.toSnakeCase('APIKey');        // 'api_key'
+     * AutoEnvParse.toSnakeCase('HTTPSPort');     // 'https_port'
      * ```
      */
     static toSnakeCase(str: string): string {

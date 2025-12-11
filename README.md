@@ -1,6 +1,6 @@
 # auto-envparse
 
-> Automatic environment variable parsing with zero configuration and type inference
+> ⚡ Automatic environment variable parsing with zero configuration and type inference
 
 [![NPM Version][npm-image]][npm-url]
 [![Test](https://github.com/vlavrynovych/auto-envparse/actions/workflows/test.yml/badge.svg)](https://github.com/vlavrynovych/auto-envparse/actions/workflows/test.yml)
@@ -28,13 +28,15 @@ const config = cleanEnv(process.env, schema);
 
 ```typescript
 // ✅ auto-envparse: Your object IS the schema
+import { AutoEnvParse } from 'auto-envparse';
+
 const config = {
     host: 'localhost',
     port: 5432,
     ssl: false
 };
 
-parseEnv(config, 'DB'); // Done!
+AutoEnvParse.parse(config, 'DB'); // Done!
 ```
 
 **The type of each default value tells auto-envparse how to parse it.** No schemas. No validators. No manual type conversion. Just works.
@@ -42,7 +44,7 @@ parseEnv(config, 'DB'); // Done!
 ### Works with Classes Too
 
 ```typescript
-import { createFrom } from 'auto-envparse';
+import { AutoEnvParse } from 'auto-envparse';
 
 class DatabaseConfig {
     host = 'localhost';
@@ -51,7 +53,7 @@ class DatabaseConfig {
 }
 
 // Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
-const config = createFrom(DatabaseConfig, 'DB');
+const config = AutoEnvParse.parse(DatabaseConfig, 'DB');
 // Returns a fully populated DatabaseConfig instance
 ```
 
@@ -90,7 +92,7 @@ yarn add auto-envparse
 ### 1. Basic Usage
 
 ```typescript
-import parseEnv from 'auto-envparse';
+import { AutoEnvParse } from 'auto-envparse';
 
 const config = {
     apiUrl: 'http://localhost:3000',
@@ -99,16 +101,16 @@ const config = {
 };
 
 // Environment variables: APP_API_URL, APP_TIMEOUT, APP_DEBUG
-parseEnv(config, 'APP');
+AutoEnvParse.parse(config, 'APP');
 
 console.log(config.timeout); // Automatically converted to number
 ```
 
-**Alias available:** Use `parse()` if you prefer shorter names:
+**Shorter alias:** Import as default for shorter code:
 
 ```typescript
-import { parse } from 'auto-envparse';
-parse(config, 'APP');
+import AEP from 'auto-envparse';
+AEP.parse(config, 'APP');
 ```
 
 ### 2. Without Prefix
@@ -116,6 +118,8 @@ parse(config, 'APP');
 Prefix is optional - omit it for global environment variables:
 
 ```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
 const config = {
     host: 'localhost',
     port: 3000,
@@ -123,12 +127,14 @@ const config = {
 };
 
 // Environment variables: HOST, PORT, NODE_ENV
-parseEnv(config);
+AutoEnvParse.parse(config);
 ```
 
 ### 3. Nested Objects
 
 ```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
 const config = {
     database: {
         host: 'localhost',
@@ -145,13 +151,13 @@ const config = {
 // APP_DATABASE_PORT=5433
 // APP_DATABASE_POOL_MIN=5
 // APP_DATABASE_POOL_MAX=20
-parseEnv(config, 'APP');
+AutoEnvParse.parse(config, 'APP');
 ```
 
 ### 4. Class-Based Configuration
 
 ```typescript
-import { createFrom } from 'auto-envparse';
+import { AutoEnvParse } from 'auto-envparse';
 
 class ServerConfig {
     host = '0.0.0.0';
@@ -163,7 +169,7 @@ class ServerConfig {
 }
 
 // Environment: SERVER_HOST=example.com, SERVER_PORT=8080
-const config = createFrom(ServerConfig, 'SERVER');
+const config = AutoEnvParse.parse(ServerConfig, 'SERVER');
 console.log(config.getUrl()); // 'http://example.com:8080'
 ```
 
@@ -194,6 +200,8 @@ Flexible boolean parsing (case-insensitive):
 Add validation when needed using overrides:
 
 ```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
 const config = { port: 3000 };
 const overrides = new Map();
 
@@ -209,7 +217,7 @@ overrides.set('port', (obj, envVar) => {
     }
 });
 
-parseEnv(config, 'APP', overrides);
+AutoEnvParse.parse(config, 'APP', overrides);
 ```
 
 ### Enum Validation
@@ -217,28 +225,28 @@ parseEnv(config, 'APP', overrides);
 For enum-like values, use the built-in `enumValidator` helper:
 
 ```typescript
-import parseEnv, { enumValidator } from 'auto-envparse';
-
-type Environment = 'development' | 'staging' | 'production';
+import { AutoEnvParse } from 'auto-envparse';
 
 const config = {
-    environment: 'development' as Environment,
-    logLevel: 'info'
+    env: 'dev',
+    log: 'info',
+    region: 'us-east-1',
+    protocol: 'https'
 };
 
-const overrides = new Map();
+// Compact initialization for multiple enum fields
+const overrides = new Map([
+    ['env', AutoEnvParse.enumValidator('env', ['dev', 'staging', 'prod'])],
+    ['log', AutoEnvParse.enumValidator('log', ['debug', 'info', 'warn', 'error'])],
+    ['region', AutoEnvParse.enumValidator('region', ['us-east-1', 'us-west-2', 'eu-west-1'])],
+    ['protocol', AutoEnvParse.enumValidator('protocol', ['http', 'https'])],
+]);
 
-// Validate environment is one of the allowed values
-overrides.set('environment', enumValidator('environment', ['development', 'staging', 'production']));
+AutoEnvParse.parse(config, 'APP', overrides);
 
-// Case-insensitive enum validation
-overrides.set('logLevel', enumValidator('logLevel', ['debug', 'info', 'warn', 'error'], { caseSensitive: false }));
-
-parseEnv(config, 'APP', overrides);
-
-// ✅ Valid: APP_ENVIRONMENT=production
-// ❌ Invalid: APP_ENVIRONMENT=test (throws error)
-// ✅ Valid: APP_LOG_LEVEL=DEBUG (accepts any case)
+// ✅ Valid: APP_ENV=prod, APP_LOG=info, APP_REGION=us-west-2, APP_PROTOCOL=https
+// ❌ Invalid: APP_ENV=test (throws error - not in allowed list)
+// ❌ Invalid: APP_REGION=ap-south-1 (throws error - not in allowed list)
 ```
 
 ---
@@ -282,6 +290,8 @@ parseEnv(config, 'APP', overrides);
 Full type safety with TypeScript:
 
 ```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
 interface Config {
     host: string;
     port: number;
@@ -294,7 +304,7 @@ const config: Config = {
     ssl: false
 };
 
-parseEnv(config, 'DB');
+AutoEnvParse.parse(config, 'DB');
 
 // All types are preserved and enforced
 const host: string = config.host;
@@ -307,13 +317,21 @@ const ssl: boolean = config.ssl;
 auto-envparse supports both CommonJS and ESM:
 
 ```typescript
-// ESM (import)
-import parseEnv from 'auto-envparse';
-import { enumValidator, createFrom } from 'auto-envparse';
+// ESM (import) - Named export
+import { AutoEnvParse } from 'auto-envparse';
+AutoEnvParse.parse(config, 'DB');
 
-// CommonJS (require)
-const parseEnv = require('auto-envparse').default;
-const { enumValidator, createFrom } = require('auto-envparse');
+// ESM (import) - Default export
+import AEP from 'auto-envparse';
+AEP.parse(config, 'DB');
+
+// CommonJS (require) - Named export
+const { AutoEnvParse } = require('auto-envparse');
+AutoEnvParse.parse(config, 'DB');
+
+// CommonJS (require) - Default export
+const AEP = require('auto-envparse').default;
+AEP.parse(config, 'DB');
 ```
 
 Works seamlessly in both module systems!

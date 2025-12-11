@@ -5,6 +5,143 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-12-11
+
+### BREAKING CHANGES
+
+**Major API Redesign (#15):**
+
+This release simplifies the API to have one clear, unified entry point. The goal is to make the library easier to learn and use.
+
+#### 1. Class Renamed: `AutoEnv` → `AutoEnvParse`
+The main class has been renamed to better align with the package name.
+
+```typescript
+// Before (v1.x)
+import { AutoEnv } from 'auto-envparse';
+AutoEnv.parse(config, 'DB');
+
+// After (v2.0)
+import { AutoEnvParse } from 'auto-envparse';
+AutoEnvParse.parse(config, 'DB');
+```
+
+#### 2. Simplified Exports - Only One Class
+All function exports (`parseEnv`, `parse`, `createFrom`) have been removed. Only the class is exported.
+
+```typescript
+// Before (v1.x) - Multiple ways to import
+import parseEnv from 'auto-envparse';           // ❌ Removed
+import { parse } from 'auto-envparse';          // ❌ Removed
+import { createFrom } from 'auto-envparse';     // ❌ Removed
+import { AutoEnv } from 'auto-envparse';        // ❌ Renamed
+
+// After (v2.0) - One clear way
+import { AutoEnvParse } from 'auto-envparse';   // ✅ Named export
+// or
+import AEP from 'auto-envparse';                // ✅ Default export (alias)
+```
+
+#### 3. Unified `parse()` Method
+The `parse()` method now handles both plain objects and class constructors using TypeScript overloads. The `createFrom()` method is replaced by the unified `parse()`.
+
+```typescript
+// Before (v1.x) - Two separate methods
+AutoEnv.parse(config, 'DB');              // For objects
+const instance = createFrom(DbClass, 'DB'); // For classes
+
+// After (v2.0) - One unified method
+AutoEnvParse.parse(config, 'DB');              // For objects
+const instance = AutoEnvParse.parse(DbClass, 'DB'); // For classes
+```
+
+#### 4. `parse()` Now Returns the Parsed Object
+The `parse()` method now returns the populated object/instance instead of void.
+
+```typescript
+// Before (v1.x) - Returns void
+const config = { host: 'localhost' };
+AutoEnv.parse(config, 'DB');
+console.log(config.host);
+
+// After (v2.0) - Returns the object
+const config = AutoEnvParse.parse({ host: 'localhost' }, 'DB');
+console.log(config.host);
+```
+
+### Migration Guide (v1.x → v2.0)
+
+**Step 1: Update imports**
+```typescript
+// Replace this:
+import parseEnv, { parse, createFrom, AutoEnv } from 'auto-envparse';
+
+// With this:
+import { AutoEnvParse } from 'auto-envparse';
+// or
+import AEP from 'auto-envparse';  // For shorter alias
+```
+
+**Step 2: Update parse calls**
+```typescript
+// Before
+parseEnv(config, 'DB');
+parse(config, 'DB');
+AutoEnv.parse(config, 'DB');
+
+// After
+AutoEnvParse.parse(config, 'DB');
+// or
+AEP.parse(config, 'DB');  // With alias
+```
+
+**Step 3: Replace createFrom() with parse()**
+```typescript
+// Before
+import { createFrom } from 'auto-envparse';
+class DbConfig { host = 'localhost'; port = 5432; }
+const config = createFrom(DbConfig, 'DB');
+
+// After
+import { AutoEnvParse } from 'auto-envparse';
+class DbConfig { host = 'localhost'; port = 5432; }
+const config = AutoEnvParse.parse(DbConfig, 'DB');
+```
+
+**Step 4: Optionally use return value**
+```typescript
+// Before (mutates in place)
+const config = { host: 'localhost' };
+AutoEnv.parse(config, 'DB');
+
+// After (returns the object)
+const config = AutoEnvParse.parse({ host: 'localhost' }, 'DB');
+```
+
+### Added
+- **Unified `parse()` method** with TypeScript overloads for both objects and class constructors
+- **Return value for `parse()`** - Now returns the populated object/instance for better ergonomics
+- **Default export** - Class can be imported as default for convenience
+- **Emoji in description** - Added ⚡ to package description
+
+### Changed
+- **Class name**: `AutoEnv` → `AutoEnvParse`
+- **API surface**: Reduced from 5 exports to 1 class (available as both named and default export)
+- **Method behavior**: `parse()` now returns the parsed object instead of void
+
+### Removed
+- **`parseEnv()` function** - Use `AutoEnvParse.parse()` instead
+- **`parse()` function alias** - Use `AutoEnvParse.parse()` instead
+- **`createFrom()` function** - Use `AutoEnvParse.parse()` with class constructor instead
+
+### Benefits of v2.0
+- ✅ **Simpler API** - One class, two main methods (`parse`, `enumValidator`)
+- ✅ **Better discoverability** - Type `AutoEnvParse.` to see all available methods
+- ✅ **One way to do it** - No confusion about which import/function to use
+- ✅ **Better TypeScript support** - Overloads provide excellent type inference
+- ✅ **Clearer naming** - Class name matches package name
+- ✅ **More ergonomic** - Return values enable cleaner code patterns
+
 ## [1.1.1] - 2025-12-10
 
 ### Fixed
@@ -96,6 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `toSnakeCase()` - Convert camelCase to snake_case
 - `coerceValue()` - Type coercion utility
 
+[2.0.0]: https://github.com/vlavrynovych/auto-envparse/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/vlavrynovych/auto-envparse/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/vlavrynovych/auto-envparse/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/vlavrynovych/auto-envparse/releases/tag/v1.0.0
