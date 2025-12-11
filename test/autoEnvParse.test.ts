@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { AutoEnv } from '../src/autoEnv';
+import { AutoEnvParse } from '../src/autoEnvParse';
 
-describe('AutoEnv - Standalone Usage', () => {
+describe('AutoEnvParse - Standalone Usage', () => {
     // Store original env vars to restore after tests
     const originalEnv: Record<string, string | undefined> = {};
 
@@ -42,7 +42,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_SSL = 'true';
             process.env.TEST_POOL_SIZE = '20';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             expect(config.host).toBe('db.example.com');
             expect(config.port).toBe(3306);
@@ -59,7 +59,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.DB_DATABASE = 'production';
             process.env.DB_TIMEOUT = '10000';
 
-            AutoEnv.parse(dbConfig, 'DB');
+            AutoEnvParse.parse(dbConfig, 'DB');
 
             expect(dbConfig.database).toBe('production');
             expect(dbConfig.timeout).toBe(10000);
@@ -70,17 +70,17 @@ describe('AutoEnv - Standalone Usage', () => {
 
             // Lowercase prefix should throw
             expect(() => {
-                AutoEnv.parse(config, 'db');
+                AutoEnvParse.parse(config, 'db');
             }).toThrow(/Invalid prefix "db"/);
 
             // Prefix with special characters should throw
             expect(() => {
-                AutoEnv.parse(config, 'DB_');
+                AutoEnvParse.parse(config, 'DB_');
             }).toThrow(/Invalid prefix "DB_"/);
 
             // Mixed case should throw
             expect(() => {
-                AutoEnv.parse(config, 'Db');
+                AutoEnvParse.parse(config, 'Db');
             }).toThrow(/Invalid prefix "Db"/);
         });
 
@@ -95,7 +95,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_CONNECTION_HOST = 'remote.example.com';
             process.env.TEST_CONNECTION_PORT = '3307';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             expect(config.connection.host).toBe('remote.example.com');
             expect(config.connection.port).toBe(3307);
@@ -121,7 +121,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_A1_B2 = 'true';
             process.env.TEST_A2 = 'false';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Verify all levels are correctly parsed
             expect(config.a1.b1.c1.d1).toBe('production');
@@ -153,7 +153,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_PORT = '8080';
             process.env.TEST_RETRIES = '5';
 
-            AutoEnv.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, 'TEST', overrides);
 
             expect(config.port).toBe(8080);
             expect(config.retries).toBe(5);
@@ -161,7 +161,7 @@ describe('AutoEnv - Standalone Usage', () => {
             // Invalid port (out of range) - should keep original
             process.env.TEST_PORT = '99999';
             const config2 = { port: 5432, retries: 3 };
-            AutoEnv.parse(config2, 'TEST', overrides);
+            AutoEnvParse.parse(config2, 'TEST', overrides);
 
             expect(config2.port).toBe(5432);
         });
@@ -176,7 +176,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_OPTIONAL = 'from-env';
             process.env.TEST_UNSET = 'also-from-env';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             expect(config.optional).toBe('from-env');
             expect(config.unset).toBe('also-from-env');
@@ -192,7 +192,7 @@ describe('AutoEnv - Standalone Usage', () => {
             const config = Object.create(protoObject) as { inherited: string; own: string };
             config.own = 'default';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Own property should be updated
             expect(config.own).toBe('own-value');
@@ -209,7 +209,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_TAGS = '["tag1", "tag2", "tag3"]';
             process.env.TEST_NUMBERS = '[10, 20, 30]';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             expect(config.tags).toEqual(['tag1', 'tag2', 'tag3']);
             expect(config.numbers).toEqual([10, 20, 30]);
@@ -222,7 +222,7 @@ describe('AutoEnv - Standalone Usage', () => {
 
             process.env.TEST_PATTERNS = '["^test", ".*\\\\.js$"]';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             expect(config.patterns).toHaveLength(2);
             expect(config.patterns[0]).toBeInstanceOf(RegExp);
@@ -238,7 +238,7 @@ describe('AutoEnv - Standalone Usage', () => {
 
             process.env.TEST_TAGS = 'not-valid-json';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Should keep default value when JSON is invalid
             expect(config.tags).toEqual(['default1', 'default2']);
@@ -254,7 +254,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_NESTED = 'not-valid-json';
             process.env.TEST_NESTED_VALUE = '200';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Should fall back to dot-notation
             expect(config.nested.value).toBe(200);
@@ -273,7 +273,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_COMPLEX = 'not-valid-json';
             process.env.TEST_COMPLEX_VALUE = '200';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Should fall back to dot-notation
             expect(config.complex.value).toBe(200);
@@ -292,7 +292,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_NESTED_VALUE = '200';
             process.env.TEST_NESTED_INHERITED = 'should-not-apply';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Own property should be updated
             expect(config.nested.value).toBe(200);
@@ -317,7 +317,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_INNER_COUNT = '20';
             process.env.TEST_NAME = 'modified';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             expect(config.inner.value).toBe('updated');
             expect(config.inner.count).toBe(20);
@@ -337,7 +337,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_COMPLEX = '"just a string"';
             process.env.TEST_COMPLEX_VALUE = '200';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Should ignore the non-object JSON and use dot-notation
             expect(config.complex.value).toBe(200);
@@ -355,7 +355,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_NESTED = '42';
             process.env.TEST_NESTED_VALUE = '200';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Should ignore the non-object JSON and use dot-notation
             expect(config.nested.value).toBe(200);
@@ -373,7 +373,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_NESTED = 'null';
             process.env.TEST_NESTED_VALUE = '300';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Should ignore the null JSON and use dot-notation
             expect(config.nested.value).toBe(300);
@@ -390,7 +390,7 @@ describe('AutoEnv - Standalone Usage', () => {
             // Provide valid JSON object
             process.env.TEST_NESTED = '{"value": 500, "name": "from-json"}';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Should apply JSON values
             expect(config.nested.value).toBe(500);
@@ -410,7 +410,7 @@ describe('AutoEnv - Standalone Usage', () => {
             // Provide valid JSON object
             process.env.TEST_COMPLEX = '{"value": 999, "count": 42}';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Should apply JSON values
             expect(config.complex.value).toBe(999);
@@ -438,7 +438,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_INNER_COUNT = '10';
             process.env.TEST_NAME = 'updated-root';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             expect(config.inner.nested.value).toBe('very-deep');
             expect(config.inner.count).toBe(10);
@@ -461,7 +461,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_COMPLEX_VALUE = '200';
             process.env.TEST_COMPLEX_INHERITED = 'should-not-apply';
 
-            AutoEnv.parse(config, 'TEST');
+            AutoEnvParse.parse(config, 'TEST');
 
             // Own property should be updated
             expect(config.complex.value).toBe(200);
@@ -482,7 +482,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.PORT = '3306';
             process.env.SSL = 'true';
 
-            AutoEnv.parse(config);
+            AutoEnvParse.parse(config);
 
             expect(config.host).toBe('example.com');
             expect(config.port).toBe(3306);
@@ -505,7 +505,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.DATABASE_HOST = 'remote.example.com';
             process.env.DATABASE_PORT = '3307';
 
-            AutoEnv.parse(config);
+            AutoEnvParse.parse(config);
 
             expect(config.database.host).toBe('remote.example.com');
             expect(config.database.port).toBe(3307);
@@ -535,7 +535,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.PORT = '8080';
             process.env.ENVIRONMENT = 'production';
 
-            AutoEnv.parse(config, '', overrides);
+            AutoEnvParse.parse(config, '', overrides);
 
             expect(config.port).toBe(8080);
             expect(config.environment).toBe('production');
@@ -550,7 +550,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.PATH = './custom/path';
             process.env.MAX_FILES = '50';
 
-            const result = AutoEnv.loadNestedFromEnv('', {
+            const result = AutoEnvParse.loadNestedFromEnv('', {
                 enabled: false,
                 path: './default',
                 maxFiles: 10
@@ -579,7 +579,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.CONNECTION_TIMEOUT = '30000';
             process.env.API_KEY = 'secret-key-123';
 
-            AutoEnv.parse(config);
+            AutoEnvParse.parse(config);
 
             expect(config.maxRetries).toBe(10);
             expect(config.connectionTimeout).toBe(30000);
@@ -609,7 +609,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.DATABASE_PORT = '3307';
             process.env.DATABASE_TIMEOUT = '10000';
 
-            AutoEnv.parse(config, ''); // Explicit empty prefix
+            AutoEnvParse.parse(config, ''); // Explicit empty prefix
 
             // Should use dot-notation for complex object
             expect(config.database.host).toBe('complex-host.example.com');
@@ -638,7 +638,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.APP_PORT = '8080';
             process.env.APP_DEBUG = 'true';
 
-            AutoEnv.parse(config, ''); // Empty string prefix
+            AutoEnvParse.parse(config, ''); // Empty string prefix
 
             expect(config.app.port).toBe(8080);
             expect(config.app.debug).toBe(true);
@@ -665,7 +665,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.VALUE = '200';
             process.env.NAME = 'custom';
 
-            AutoEnv.parse(config, ''); // Empty prefix
+            AutoEnvParse.parse(config, ''); // Empty prefix
 
             expect(config[''].value).toBe(200);
             expect(config[''].name).toBe('custom');
@@ -688,7 +688,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.DB_PORT = '5433';
             process.env.DB_SSL = 'true';
 
-            const config = AutoEnv.createFrom(DatabaseConfig, 'DB');
+            const config = AutoEnvParse.createFrom(DatabaseConfig, 'DB');
 
             expect(config).toBeInstanceOf(DatabaseConfig);
             expect(config.host).toBe('prod.example.com');
@@ -712,7 +712,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.PORT = '8080';
             process.env.DEBUG = 'true';
 
-            const config = AutoEnv.createFrom(AppConfig);
+            const config = AutoEnvParse.createFrom(AppConfig);
 
             expect(config).toBeInstanceOf(AppConfig);
             expect(config.nodeEnv).toBe('production');
@@ -740,7 +740,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.SERVER_DATABASE_HOST = 'db.example.com';
             process.env.SERVER_DATABASE_PORT = '5433';
 
-            const config = AutoEnv.createFrom(ServerConfig, 'SERVER');
+            const config = AutoEnvParse.createFrom(ServerConfig, 'SERVER');
 
             expect(config).toBeInstanceOf(ServerConfig);
             expect(config.host).toBe('127.0.0.1');
@@ -777,7 +777,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.API_PORT = '8443';
             process.env.API_ENVIRONMENT = 'production';
 
-            const config = AutoEnv.createFrom(ApiConfig, 'API', overrides);
+            const config = AutoEnvParse.createFrom(ApiConfig, 'API', overrides);
 
             expect(config).toBeInstanceOf(ApiConfig);
             expect(config.port).toBe(8443);
@@ -798,7 +798,7 @@ describe('AutoEnv - Standalone Usage', () => {
             // Only set one env var
             process.env.TEST_TIMEOUT = '10000';
 
-            const config = AutoEnv.createFrom(DefaultConfig, 'TEST');
+            const config = AutoEnvParse.createFrom(DefaultConfig, 'TEST');
 
             expect(config).toBeInstanceOf(DefaultConfig);
             expect(config.timeout).toBe(10000); // From env
@@ -822,7 +822,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.APP_HOST = 'example.com';
             process.env.APP_PORT = '3306';
 
-            const config = AutoEnv.createFrom(ConfigWithMethods, 'APP');
+            const config = AutoEnvParse.createFrom(ConfigWithMethods, 'APP');
 
             expect(config).toBeInstanceOf(ConfigWithMethods);
             expect(config.host).toBe('example.com');
@@ -850,7 +850,7 @@ describe('AutoEnv - Standalone Usage', () => {
                 // Since parse checks types, we need to test via reflection
                 expect(() => {
                     // @ts-expect-error - accessing private method for testing
-                    AutoEnv.applyNestedObject(config, 'nested', 'TEST_NESTED');
+                    AutoEnvParse.applyNestedObject(config, 'nested', 'TEST_NESTED');
                 }).toThrow(/Internal error: applyNestedObject called with non-plain-object/);
             });
 
@@ -860,21 +860,21 @@ describe('AutoEnv - Standalone Usage', () => {
 
                 expect(() => {
                     // @ts-expect-error - accessing private method for testing
-                    AutoEnv.applyNestedObject(config, 'nested', 'TEST_NESTED');
+                    AutoEnvParse.applyNestedObject(config, 'nested', 'TEST_NESTED');
                 }).toThrow(/Internal error: applyNestedObject called with non-plain-object/);
             });
 
             it('should throw error when applyComplexObject receives null', () => {
                 expect(() => {
                     // @ts-expect-error - accessing private method for testing
-                    AutoEnv.applyComplexObject('complex', 'TEST_COMPLEX', null);
+                    AutoEnvParse.applyComplexObject('complex', 'TEST_COMPLEX', null);
                 }).toThrow(/Internal error: applyComplexObject called with non-object/);
             });
 
             it('should throw error when applyComplexObject receives primitive', () => {
                 expect(() => {
                     // @ts-expect-error - accessing private method for testing
-                    AutoEnv.applyComplexObject('complex', 'TEST_COMPLEX', 'string');
+                    AutoEnvParse.applyComplexObject('complex', 'TEST_COMPLEX', 'string');
                 }).toThrow(/Internal error: applyComplexObject called with non-object/);
             });
         });
@@ -883,35 +883,35 @@ describe('AutoEnv - Standalone Usage', () => {
     describe('Type coercion methods', () => {
         describe('parseBoolean()', () => {
             it('should parse truthy values correctly', () => {
-                expect(AutoEnv.parseBoolean('true')).toBe(true);
-                expect(AutoEnv.parseBoolean('TRUE')).toBe(true);
-                expect(AutoEnv.parseBoolean('1')).toBe(true);
-                expect(AutoEnv.parseBoolean('yes')).toBe(true);
-                expect(AutoEnv.parseBoolean('YES')).toBe(true);
-                expect(AutoEnv.parseBoolean('on')).toBe(true);
-                expect(AutoEnv.parseBoolean('ON')).toBe(true);
+                expect(AutoEnvParse.parseBoolean('true')).toBe(true);
+                expect(AutoEnvParse.parseBoolean('TRUE')).toBe(true);
+                expect(AutoEnvParse.parseBoolean('1')).toBe(true);
+                expect(AutoEnvParse.parseBoolean('yes')).toBe(true);
+                expect(AutoEnvParse.parseBoolean('YES')).toBe(true);
+                expect(AutoEnvParse.parseBoolean('on')).toBe(true);
+                expect(AutoEnvParse.parseBoolean('ON')).toBe(true);
             });
 
             it('should parse falsy values correctly', () => {
-                expect(AutoEnv.parseBoolean('false')).toBe(false);
-                expect(AutoEnv.parseBoolean('FALSE')).toBe(false);
-                expect(AutoEnv.parseBoolean('0')).toBe(false);
-                expect(AutoEnv.parseBoolean('no')).toBe(false);
-                expect(AutoEnv.parseBoolean('NO')).toBe(false);
-                expect(AutoEnv.parseBoolean('off')).toBe(false);
-                expect(AutoEnv.parseBoolean('OFF')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('false')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('FALSE')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('0')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('no')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('NO')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('off')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('OFF')).toBe(false);
             });
 
             it('should treat unrecognized values as false', () => {
-                expect(AutoEnv.parseBoolean('random')).toBe(false);
-                expect(AutoEnv.parseBoolean('maybe')).toBe(false);
-                expect(AutoEnv.parseBoolean('')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('random')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('maybe')).toBe(false);
+                expect(AutoEnvParse.parseBoolean('')).toBe(false);
             });
 
             it('should warn on unrecognized values in strict mode', () => {
                 const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-                expect(AutoEnv.parseBoolean('maybe', true)).toBe(false);
+                expect(AutoEnvParse.parseBoolean('maybe', true)).toBe(false);
                 expect(warnSpy).toHaveBeenCalledWith(
                     expect.stringContaining('Unrecognized boolean value "maybe"')
                 );
@@ -922,45 +922,45 @@ describe('AutoEnv - Standalone Usage', () => {
 
         describe('parseNumber()', () => {
             it('should parse valid numbers', () => {
-                expect(AutoEnv.parseNumber('42')).toBe(42);
-                expect(AutoEnv.parseNumber('3.14')).toBe(3.14);
-                expect(AutoEnv.parseNumber('-10')).toBe(-10);
+                expect(AutoEnvParse.parseNumber('42')).toBe(42);
+                expect(AutoEnvParse.parseNumber('3.14')).toBe(3.14);
+                expect(AutoEnvParse.parseNumber('-10')).toBe(-10);
             });
 
             it('should return NaN for invalid numbers', () => {
-                expect(AutoEnv.parseNumber('not-a-number')).toBeNaN();
+                expect(AutoEnvParse.parseNumber('not-a-number')).toBeNaN();
             });
         });
 
         describe('toSnakeCase()', () => {
             it('should convert camelCase to snake_case', () => {
-                expect(AutoEnv.toSnakeCase('poolSize')).toBe('pool_size');
-                expect(AutoEnv.toSnakeCase('maxRetries')).toBe('max_retries');
-                expect(AutoEnv.toSnakeCase('connectionTimeout')).toBe('connection_timeout');
-                expect(AutoEnv.toSnakeCase('host')).toBe('host');
+                expect(AutoEnvParse.toSnakeCase('poolSize')).toBe('pool_size');
+                expect(AutoEnvParse.toSnakeCase('maxRetries')).toBe('max_retries');
+                expect(AutoEnvParse.toSnakeCase('connectionTimeout')).toBe('connection_timeout');
+                expect(AutoEnvParse.toSnakeCase('host')).toBe('host');
             });
 
             it('should handle consecutive capitals correctly', () => {
-                expect(AutoEnv.toSnakeCase('APIKey')).toBe('api_key');
-                expect(AutoEnv.toSnakeCase('HTTPSPort')).toBe('https_port');
-                expect(AutoEnv.toSnakeCase('XMLParser')).toBe('xml_parser');
-                expect(AutoEnv.toSnakeCase('URLPath')).toBe('url_path');
+                expect(AutoEnvParse.toSnakeCase('APIKey')).toBe('api_key');
+                expect(AutoEnvParse.toSnakeCase('HTTPSPort')).toBe('https_port');
+                expect(AutoEnvParse.toSnakeCase('XMLParser')).toBe('xml_parser');
+                expect(AutoEnvParse.toSnakeCase('URLPath')).toBe('url_path');
             });
         });
 
         describe('coerceValue()', () => {
             it('should coerce to boolean', () => {
-                expect(AutoEnv.coerceValue('true', 'boolean')).toBe(true);
-                expect(AutoEnv.coerceValue('false', 'boolean')).toBe(false);
+                expect(AutoEnvParse.coerceValue('true', 'boolean')).toBe(true);
+                expect(AutoEnvParse.coerceValue('false', 'boolean')).toBe(false);
             });
 
             it('should coerce to number', () => {
-                expect(AutoEnv.coerceValue('42', 'number')).toBe(42);
-                expect(AutoEnv.coerceValue('3.14', 'number')).toBe(3.14);
+                expect(AutoEnvParse.coerceValue('42', 'number')).toBe(42);
+                expect(AutoEnvParse.coerceValue('3.14', 'number')).toBe(3.14);
             });
 
             it('should return string for string type', () => {
-                expect(AutoEnv.coerceValue('hello', 'string')).toBe('hello');
+                expect(AutoEnvParse.coerceValue('hello', 'string')).toBe('hello');
             });
         });
     });
@@ -971,7 +971,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_LOGGING_PATH = './custom/logs';
             process.env.TEST_LOGGING_MAX_FILES = '25';
 
-            const result = AutoEnv.loadNestedFromEnv('TEST_LOGGING', {
+            const result = AutoEnvParse.loadNestedFromEnv('TEST_LOGGING', {
                 enabled: false,
                 path: './logs',
                 maxFiles: 10
@@ -987,7 +987,7 @@ describe('AutoEnv - Standalone Usage', () => {
         it('should preserve defaults for unset env vars', () => {
             process.env.TEST_CONFIG_ENABLED = 'true';
 
-            const result = AutoEnv.loadNestedFromEnv('TEST_CONFIG', {
+            const result = AutoEnvParse.loadNestedFromEnv('TEST_CONFIG', {
                 enabled: false,
                 path: './default',
                 maxFiles: 10
@@ -1010,8 +1010,8 @@ describe('AutoEnv - Standalone Usage', () => {
 
             process.env.TEST_DATABASE_HOST = 'example.com';
 
-            const result1 = AutoEnv.loadNestedFromEnv('TEST', defaults);
-            const result2 = AutoEnv.loadNestedFromEnv('TEST', defaults);
+            const result1 = AutoEnvParse.loadNestedFromEnv('TEST', defaults);
+            const result2 = AutoEnvParse.loadNestedFromEnv('TEST', defaults);
 
             // Verify results are independent
             expect(result1.database.host).toBe('example.com');
@@ -1034,7 +1034,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.TEST_OWN = 'updated';
             process.env.TEST_INHERITED = 'should-not-apply';
 
-            const result = AutoEnv.loadNestedFromEnv('TEST', defaults);
+            const result = AutoEnvParse.loadNestedFromEnv('TEST', defaults);
 
             // Only own property should be updated
             expect(result.own).toBe('updated');
@@ -1052,11 +1052,11 @@ describe('AutoEnv - Standalone Usage', () => {
             };
 
             const overrides = new Map();
-            overrides.set('environment', AutoEnv.enumValidator('environment', ['development', 'staging', 'production']));
+            overrides.set('environment', AutoEnvParse.enumValidator('environment', ['development', 'staging', 'production']));
 
             process.env.TEST_ENVIRONMENT = 'production';
 
-            AutoEnv.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, 'TEST', overrides);
 
             expect(config.environment).toBe('production');
         });
@@ -1067,12 +1067,12 @@ describe('AutoEnv - Standalone Usage', () => {
             };
 
             const overrides = new Map();
-            overrides.set('environment', AutoEnv.enumValidator('environment', ['development', 'staging', 'production']));
+            overrides.set('environment', AutoEnvParse.enumValidator('environment', ['development', 'staging', 'production']));
 
             process.env.TEST_ENVIRONMENT = 'invalid';
 
             expect(() => {
-                AutoEnv.parse(config, 'TEST', overrides);
+                AutoEnvParse.parse(config, 'TEST', overrides);
             }).toThrow(/Invalid value for TEST_ENVIRONMENT: "invalid"/);
         });
 
@@ -1082,11 +1082,11 @@ describe('AutoEnv - Standalone Usage', () => {
             };
 
             const overrides = new Map();
-            overrides.set('environment', AutoEnv.enumValidator('environment', ['development', 'staging', 'production']));
+            overrides.set('environment', AutoEnvParse.enumValidator('environment', ['development', 'staging', 'production']));
 
             delete process.env.TEST_ENVIRONMENT;
 
-            AutoEnv.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, 'TEST', overrides);
 
             expect(config.environment).toBe('development');
         });
@@ -1097,11 +1097,11 @@ describe('AutoEnv - Standalone Usage', () => {
             };
 
             const overrides = new Map();
-            overrides.set('logLevel', AutoEnv.enumValidator('logLevel', ['DEBUG', 'INFO', 'WARN', 'ERROR'], { caseSensitive: false }));
+            overrides.set('logLevel', AutoEnvParse.enumValidator('logLevel', ['DEBUG', 'INFO', 'WARN', 'ERROR'], { caseSensitive: false }));
 
             process.env.TEST_LOG_LEVEL = 'debug';
 
-            AutoEnv.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, 'TEST', overrides);
 
             // Should use the original case from allowedValues
             expect(config.logLevel).toBe('DEBUG');
@@ -1113,12 +1113,12 @@ describe('AutoEnv - Standalone Usage', () => {
             };
 
             const overrides = new Map();
-            overrides.set('status', AutoEnv.enumValidator('status', ['Active', 'Inactive']));
+            overrides.set('status', AutoEnvParse.enumValidator('status', ['Active', 'Inactive']));
 
             process.env.TEST_STATUS = 'active';
 
             expect(() => {
-                AutoEnv.parse(config, 'TEST', overrides);
+                AutoEnvParse.parse(config, 'TEST', overrides);
             }).toThrow(/Invalid value for TEST_STATUS: "active"/);
         });
 
@@ -1128,11 +1128,11 @@ describe('AutoEnv - Standalone Usage', () => {
             };
 
             const overrides = new Map();
-            overrides.set('mode', AutoEnv.enumValidator('mode', ['read', 'write', 'admin']));
+            overrides.set('mode', AutoEnvParse.enumValidator('mode', ['read', 'write', 'admin']));
 
             process.env.TEST_MODE = 'write';
 
-            AutoEnv.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, 'TEST', overrides);
 
             expect(config.mode).toBe('write');
         });
@@ -1162,7 +1162,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.DB_POOL_MIN = '5';
             process.env.DB_POOL_MAX = '50';
 
-            AutoEnv.parse(dbConfig, 'DB');
+            AutoEnvParse.parse(dbConfig, 'DB');
 
             expect(dbConfig.host).toBe('prod-db.example.com');
             expect(dbConfig.port).toBe(5433);
@@ -1194,7 +1194,7 @@ describe('AutoEnv - Standalone Usage', () => {
             process.env.APP_CORS_ORIGIN = 'https://example.com';
             process.env.APP_RATE_LIMIT_MAX = '1000';
 
-            AutoEnv.parse(appConfig, 'APP');
+            AutoEnvParse.parse(appConfig, 'APP');
 
             expect(appConfig.port).toBe(8080);
             expect(appConfig.debug).toBe(true);
