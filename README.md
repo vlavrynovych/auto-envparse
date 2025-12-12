@@ -68,6 +68,8 @@ Perfect for existing codebases with class-based configuration.
 - 🔄 **Type Coercion** - String env vars → correct types (string, number, boolean, array)
 - 🐫 **Smart Naming** - Auto camelCase → SNAKE_CASE conversion
 - 🏗️ **Nested Objects** - Full support with dot-notation (e.g., `DB_POOL_MIN`)
+- 📋 **Nested Arrays** - Arrays of objects with dot-notation (e.g., `SERVERS_0_HOST`)
+- 🔀 **Transform Functions** - Custom value transformations with external libraries
 - 🛠️ **Custom Overrides** - Add validation or custom parsing when needed
 - 📦 **Dual Package** - ESM and CommonJS support
 - 🎨 **TypeScript** - Full type safety included
@@ -192,6 +194,44 @@ Flexible boolean parsing (case-insensitive):
 
 - **Truthy**: `'true'`, `'1'`, `'yes'`, `'on'`
 - **Falsy**: Everything else
+
+### Nested Arrays
+
+Arrays of objects support both JSON and dot-notation formats. Dot-notation takes priority:
+
+**Dot-Notation Format** (Recommended):
+```typescript
+const config = {
+    servers: [{
+        host: 'localhost',
+        port: 3000
+    }]
+};
+
+// Environment variables:
+// APP_SERVERS_0_HOST=server1.com
+// APP_SERVERS_0_PORT=8080
+// APP_SERVERS_1_HOST=server2.com
+// APP_SERVERS_1_PORT=8081
+
+AutoEnvParse.parse(config, 'APP');
+// Result: servers = [
+//   { host: 'server1.com', port: 8080 },
+//   { host: 'server2.com', port: 8081 }
+// ]
+```
+
+**JSON Format** (Also supported):
+```typescript
+// APP_SERVERS='[{"host":"server1.com","port":8080}]'
+AutoEnvParse.parse(config, 'APP');
+```
+
+**Features**:
+- ✅ Multilevel nesting: `APP_SERVICES_0_CONFIG_DATABASE_HOST=db.com`
+- ✅ Sparse arrays: Indices `0, 2, 5` → compact array with 3 elements
+- ✅ Type coercion: String env vars → proper types in array elements
+- ✅ Empty arrays skipped (require template element)
 
 ---
 

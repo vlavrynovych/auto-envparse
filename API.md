@@ -225,6 +225,72 @@ console.log(config.database.host);      // 'prod.example.com'
 console.log(config.database.pool.min);  // 5
 ```
 
+#### Nested Arrays
+
+Arrays of objects support both JSON and dot-notation formats. Dot-notation takes priority when both are present.
+
+**Basic Usage with Dot-Notation**:
+```typescript
+const config = {
+    servers: [{
+        host: 'localhost',
+        port: 3000
+    }]
+};
+
+// Environment variables (dot-notation):
+// APP_SERVERS_0_HOST=server1.com
+// APP_SERVERS_0_PORT=8080
+// APP_SERVERS_1_HOST=server2.com
+// APP_SERVERS_1_PORT=8081
+
+AutoEnvParse.parse(config, 'APP');
+
+console.log(config.servers);
+// [
+//   { host: 'server1.com', port: 8080 },
+//   { host: 'server2.com', port: 8081 }
+// ]
+```
+
+**Multilevel Nesting**:
+```typescript
+const config = {
+    services: [{
+        name: '',
+        config: {
+            database: {
+                host: 'localhost',
+                port: 5432
+            }
+        }
+    }]
+};
+
+// APP_SERVICES_0_NAME=web
+// APP_SERVICES_0_CONFIG_DATABASE_HOST=db1.com
+// APP_SERVICES_0_CONFIG_DATABASE_PORT=5433
+// APP_SERVICES_1_NAME=api
+// APP_SERVICES_1_CONFIG_DATABASE_HOST=db2.com
+// APP_SERVICES_1_CONFIG_DATABASE_PORT=5434
+
+AutoEnvParse.parse(config, 'APP');
+
+console.log(config.services[0].config.database.host); // 'db1.com'
+```
+
+**JSON Format** (also supported):
+```typescript
+// APP_SERVERS='[{"host":"server1.com","port":8080}]'
+AutoEnvParse.parse(config, 'APP');
+```
+
+**Features**:
+- **Sparse Arrays**: Indices `0, 2, 5` are automatically compacted to a 3-element array
+- **Empty Arrays**: Skipped (require at least one template element for type inference)
+- **RegExp Arrays**: Only support JSON format (dot-notation not applicable)
+- **Type Coercion**: Works within array elements (strings → numbers, booleans, etc.)
+
 #### Without Prefix
 
 Omit the prefix parameter to use global environment variables:

@@ -254,9 +254,93 @@ export class AutoEnvParse {
     }
 
     /**
-     * Apply array value from environment variable (expects JSON format).
+     * Scan environment variables for array indices.
+     * Returns sorted array of indices found in env vars matching pattern: {envVarName}_{index}_*
      *
-     * Handles special cases like RegExp arrays.
+     * @param envVarName - Base environment variable name (e.g., 'APP_SERVERS')
+     * @returns Sorted array of indices (e.g., [0, 1, 3] for sparse array)
+     */
+    private static detectArrayIndices(envVarName: string): number[] {
+        const indices = new Set<number>();
+        const pattern = new RegExp(`^${envVarName}_(\\d+)_`, 'i');
+
+        for (const key in process.env) {
+            const match = key.match(pattern);
+            if (match) {
+                indices.add(parseInt(match[1], 10));
+            }
+        }
+
+        // Return sorted indices for compact array (handles sparse arrays)
+        return Array.from(indices).sort((a, b) => a - b);
+    }
+
+    /**
+     * Parse array element from environment variables using dot-notation.
+     * Recursively applies parsing to nested objects within array elements.
+     *
+     * @param envVarName - Base environment variable name for this array element
+     * @param template - Template object to clone and populate
+     * @returns Parsed array element
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private static parseArrayElement(envVarName: string, template: any): any {
+        // Clone template to avoid mutating original
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let element: any;
+
+        if (typeof template === 'object' && template !== null && !Array.isArray(template)) {
+            // Object element - clone and recursively parse
+            element = JSON.parse(JSON.stringify(template));
+
+            // Use recursive helper to parse all nested properties
+            this.parseObjectPropertiesRecursive(element, envVarName, template);
+        } else {
+            // Primitive or array - keep template value
+            element = template;
+        }
+
+        return element;
+    }
+
+    /**
+     * Recursively parse object properties from environment variables.
+     * Helper method used by parseArrayElement for deep nesting support.
+     *
+     * @param target - Target object to populate
+     * @param envVarName - Base environment variable name
+     * @param template - Template object for type inference
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private static parseObjectPropertiesRecursive(target: any, envVarName: string, template: any): void {
+        for (const key in target) {
+            if (!Object.prototype.hasOwnProperty.call(target, key)) {
+                continue;
+            }
+
+            const templateValue = template[key];
+            const snakeKey = this.toSnakeCase(key).toUpperCase();
+            const propertyEnvVarName = `${envVarName}_${snakeKey}`;
+            const propertyEnvValue = process.env[propertyEnvVarName];
+
+            if (typeof templateValue === 'object' && templateValue !== null && !Array.isArray(templateValue)) {
+                // Nested object - recurse
+                this.parseObjectPropertiesRecursive(target[key], propertyEnvVarName, templateValue);
+            } else if (propertyEnvValue !== undefined && propertyEnvValue !== '') {
+                // Primitive value - apply coercion
+                target[key] = this.coerceValue(propertyEnvValue, typeof templateValue);
+            }
+        }
+    }
+
+    /**
+     * Apply array value from environment variable.
+     *
+     * Supports both dot-notation and JSON formats. Dot-notation takes priority.
+     * For dot-notation: APP_SERVERS_0_HOST=value, APP_SERVERS_1_HOST=value
+     * For JSON: APP_SERVERS='[{"host":"value"}]'
+     *
+     * Handles special cases like RegExp arrays (JSON only).
      * Note: RegExp detection only checks if ALL elements in the default array are RegExp instances.
      *
      * @param target - Target object
@@ -268,17 +352,43 @@ export class AutoEnvParse {
         key: K,
         envVarName: string
     ): void {
+        const currentArray = target[key];
+        if (!Array.isArray(currentArray) || currentArray.length === 0) {
+            // Empty array - skip (no template to infer from)
+            return;
+        }
+
+        // Check if this is a RegExp array (only support JSON for RegExp)
+        const isRegExpArray = currentArray.every(item => item instanceof RegExp);
+
+        // Try dot-notation first (unless RegExp array)
+        if (!isRegExpArray) {
+            const indices = this.detectArrayIndices(envVarName);
+            if (indices.length > 0) {
+                // Dot-notation found - parse array elements
+                const template = currentArray[0];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const newArray: any[] = [];
+
+                for (const index of indices) {
+                    const elementEnvVarName = `${envVarName}_${index}`;
+                    const element = this.parseArrayElement(elementEnvVarName, template);
+                    newArray.push(element);
+                }
+
+                target[key] = newArray as T[K];
+                return;
+            }
+        }
+
+        // Fall back to JSON parsing (existing behavior)
         const envValue = process.env[envVarName];
         if (envValue) {
             try {
                 const parsed = JSON.parse(envValue);
                 if (Array.isArray(parsed)) {
                     // Handle special cases (like RegExp arrays)
-                    // Check if ALL elements in the current array are RegExp instances
-                    const currentArray = target[key];
-                    if (Array.isArray(currentArray) &&
-                        currentArray.length > 0 &&
-                        currentArray.every(item => item instanceof RegExp)) {
+                    if (isRegExpArray) {
                         target[key] = parsed.map(p => new RegExp(p)) as T[K];
                     } else {
                         target[key] = parsed as T[K];
