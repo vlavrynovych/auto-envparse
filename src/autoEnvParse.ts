@@ -627,4 +627,72 @@ export class AutoEnvParse {
             }
         };
     }
+
+    /**
+     * Create a transform function for use with overrides.
+     *
+     * Returns a function that applies a custom transformation to environment variable values.
+     * The transform function receives the raw string value from the environment variable
+     * and returns the transformed value of any type.
+     *
+     * @param propertyKey - The property key to transform (must match the key in overrides Map)
+     * @param fn - Transform function that takes a string and returns the transformed value
+     * @returns Override function for use with parse()
+     *
+     * @example
+     * ```typescript
+     * import { AutoEnvParse } from 'auto-envparse';
+     *
+     * const config = {
+     *     timeout: 30000,
+     *     tags: [] as string[]
+     * };
+     *
+     * const overrides = new Map([
+     *     // Ensure minimum timeout value
+     *     ['timeout', AutoEnvParse.transform('timeout', (val) =>
+     *         Math.max(parseInt(val), 1000)
+     *     )],
+     *
+     *     // Split comma-separated values
+     *     ['tags', AutoEnvParse.transform('tags', (val) =>
+     *         val.split(',').map(t => t.trim())
+     *     )],
+     * ]);
+     *
+     * AutoEnvParse.parse(config, 'APP', overrides);
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Using lodash for complex transformations
+     * import _ from 'lodash';
+     *
+     * const overrides = new Map([
+     *     ['retries', AutoEnvParse.transform('retries', (val) =>
+     *         _.clamp(parseInt(val), 1, 10)
+     *     )],
+     * ]);
+     * ```
+     */
+    static transform<T extends object>(
+        propertyKey: string,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        fn: (value: string) => any
+    ): (target: T, envVarName: string) => void {
+        return (target: T, envVarName: string) => {
+            const value = process.env[envVarName];
+
+            if (value !== undefined) {
+                try {
+                    const transformed = fn(value);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (target as any)[propertyKey] = transformed;
+                } catch (error) {
+                    const errorMsg = error instanceof Error ? error.message : String(error);
+                    console.warn(`Warning: Transform failed for ${envVarName}: ${errorMsg}`);
+                }
+            }
+        };
+    }
 }

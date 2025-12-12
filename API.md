@@ -8,6 +8,7 @@ Complete API reference for auto-envparse v2.0.
 - [AutoEnvParse Class](#autoenvparse-class)
   - [parse()](#parse)
   - [enumValidator()](#enumvalidator)
+  - [transform()](#transform)
   - [Utility Methods](#utility-methods)
 - [Best Practices](#best-practices)
 - [Error Handling](#error-handling)
@@ -378,6 +379,158 @@ overrides.set('logLevel',
 AutoEnvParse.parse(config, 'APP', overrides);
 
 console.log(config.logLevel); // 'debug' (normalized to lowercase from allowedValues)
+```
+
+---
+
+### transform()
+
+Creates a transform function that applies custom transformations to environment variable values. Perfect for data formatting, validation, type conversion, or any custom logic you need to apply to raw string values.
+
+#### Signature
+
+```typescript
+static transform<T extends object>(
+    propertyKey: string,
+    fn: (value: string) => any
+): (target: T, envVarName: string) => void
+```
+
+#### Parameters
+
+- **propertyKey**: `string`
+  - The property name to transform
+  - Must match the key in the config object
+
+- **fn**: `(value: string) => any`
+  - Transform function that receives the raw string from the environment variable
+  - Returns the transformed value of any type
+  - Can throw errors, which will be caught and logged as warnings
+
+#### Returns
+
+A transform function for use with the `overrides` parameter in `parse()`.
+
+#### Example: Basic Transformations
+
+```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
+const config = {
+    timeout: 30000,
+    tags: [] as string[],
+    retries: 3
+};
+
+const overrides = new Map([
+    // Ensure minimum timeout value
+    ['timeout', AutoEnvParse.transform('timeout', (val) =>
+        Math.max(parseInt(val), 1000)
+    )],
+
+    // Split comma-separated values
+    ['tags', AutoEnvParse.transform('tags', (val) =>
+        val.split(',').map(t => t.trim())
+    )],
+
+    // Clamp retries between 1 and 10
+    ['retries', AutoEnvParse.transform('retries', (val) => {
+        const num = parseInt(val);
+        return Math.max(1, Math.min(num, 10));
+    })]
+]);
+
+// Environment: APP_TIMEOUT=500, APP_TAGS=alpha,beta,gamma, APP_RETRIES=15
+AutoEnvParse.parse(config, 'APP', overrides);
+
+console.log(config.timeout); // 1000 (clamped to minimum)
+console.log(config.tags);    // ['alpha', 'beta', 'gamma']
+console.log(config.retries); // 10 (clamped to maximum)
+```
+
+#### Example: Using External Libraries
+
+Transform functions work seamlessly with external libraries for complex operations:
+
+```typescript
+import { AutoEnvParse } from 'auto-envparse';
+import _ from 'lodash';
+import moment from 'moment';
+
+const config = {
+    poolSize: 10,
+    startDate: new Date(),
+    allowedIPs: [] as string[]
+};
+
+const overrides = new Map([
+    // Clamp with lodash
+    ['poolSize', AutoEnvParse.transform('poolSize', (val) =>
+        _.clamp(parseInt(val), 1, 100)
+    )],
+
+    // Parse dates with moment
+    ['startDate', AutoEnvParse.transform('startDate', (val) =>
+        moment(val, 'YYYY-MM-DD').toDate()
+    )],
+
+    // Filter and validate IP addresses
+    ['allowedIPs', AutoEnvParse.transform('allowedIPs', (val) =>
+        val.split(',')
+           .map(ip => ip.trim())
+           .filter(ip => /^[\d.]+$/.test(ip))
+    )]
+]);
+
+// Environment:
+// APP_POOL_SIZE=150
+// APP_START_DATE=2024-12-25
+// APP_ALLOWED_IPS=192.168.1.1, invalid, 10.0.0.1
+AutoEnvParse.parse(config, 'APP', overrides);
+
+console.log(config.poolSize);    // 100 (clamped by lodash)
+console.log(config.startDate);   // Date object for 2024-12-25
+console.log(config.allowedIPs);  // ['192.168.1.1', '10.0.0.1']
+```
+
+#### Example: JSON Parsing
+
+```typescript
+const config = {
+    metadata: {} as Record<string, any>
+};
+
+const overrides = new Map([
+    ['metadata', AutoEnvParse.transform('metadata', (val) => JSON.parse(val))]
+]);
+
+// Environment: APP_METADATA={"version":"1.0","enabled":true}
+AutoEnvParse.parse(config, 'APP', overrides);
+
+console.log(config.metadata); // { version: '1.0', enabled: true }
+```
+
+#### Error Handling
+
+Transform errors are caught and logged as warnings, preserving the default value:
+
+```typescript
+const config = {
+    data: null as any
+};
+
+const overrides = new Map([
+    ['data', AutoEnvParse.transform('data', (val) => {
+        if (!val) throw new Error('Value required');
+        return JSON.parse(val);
+    })]
+]);
+
+// Environment: APP_DATA=invalid-json
+AutoEnvParse.parse(config, 'APP', overrides);
+// Logs: Warning: Transform failed for APP_DATA: Unexpected token 'i'...
+
+console.log(config.data); // null (default value preserved)
 ```
 
 ---

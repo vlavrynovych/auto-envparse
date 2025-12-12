@@ -249,6 +249,59 @@ AutoEnvParse.parse(config, 'APP', overrides);
 // ❌ Invalid: APP_REGION=ap-south-1 (throws error - not in allowed list)
 ```
 
+### Transform Functions
+
+Apply custom transformations to environment variable values before they're assigned. Perfect for data validation, formatting, or complex type conversions:
+
+```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
+const config = {
+    timeout: 30000,
+    tags: [] as string[],
+    retries: 3
+};
+
+const overrides = new Map([
+    // Ensure minimum timeout value
+    ['timeout', AutoEnvParse.transform('timeout', (val) =>
+        Math.max(parseInt(val), 1000)
+    )],
+
+    // Split comma-separated values
+    ['tags', AutoEnvParse.transform('tags', (val) =>
+        val.split(',').map(t => t.trim())
+    )],
+
+    // Clamp retries between 1 and 10
+    ['retries', AutoEnvParse.transform('retries', (val) => {
+        const num = parseInt(val);
+        return Math.max(1, Math.min(num, 10));
+    })]
+]);
+
+AutoEnvParse.parse(config, 'APP', overrides);
+```
+
+**Use with external libraries** for complex transformations:
+
+```typescript
+import _ from 'lodash';
+import moment from 'moment';
+
+const overrides = new Map([
+    // Clamp with lodash
+    ['poolSize', AutoEnvParse.transform('poolSize', (val) =>
+        _.clamp(parseInt(val), 1, 100)
+    )],
+
+    // Parse dates with moment
+    ['startDate', AutoEnvParse.transform('startDate', (val) =>
+        moment(val).toDate()
+    )]
+]);
+```
+
 ---
 
 ## 📚 Documentation
