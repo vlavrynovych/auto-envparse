@@ -498,7 +498,8 @@ describe('AutoEnvParse - Nested Array Support', () => {
             AutoEnvParseAny.parseObjectPropertiesRecursive(
                 targetWithInherited,
                 'TEST_ITEMS_0',
-                template
+                template,
+                process.env
             );
 
             // Own property should be updated

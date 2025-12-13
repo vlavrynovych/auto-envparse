@@ -69,6 +69,8 @@ Perfect for existing codebases with class-based configuration.
 - 🐫 **Smart Naming** - Auto camelCase → SNAKE_CASE conversion
 - 🏗️ **Nested Objects** - Full support with dot-notation (e.g., `DB_POOL_MIN`)
 - 📋 **Nested Arrays** - Arrays of objects with dot-notation (e.g., `SERVERS_0_HOST`)
+- 📁 **.env File Loading** - Load from .env files with configurable priority
+- 🔀 **Multi-Source Support** - Merge variables from multiple sources (env, .env, .env.local)
 - 🔀 **Transform Functions** - Custom value transformations with external libraries
 - 🛠️ **Custom Overrides** - Add validation or custom parsing when needed
 - 📦 **Dual Package** - ESM and CommonJS support
@@ -232,6 +234,102 @@ AutoEnvParse.parse(config, 'APP');
 - ✅ Sparse arrays: Indices `0, 2, 5` → compact array with 3 elements
 - ✅ Type coercion: String env vars → proper types in array elements
 - ✅ Empty arrays skipped (require template element)
+
+---
+
+## 📁 .env File Loading
+
+Load environment variables from `.env` files with configurable multi-source support:
+
+### Basic Usage
+
+```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
+const config = { host: 'localhost', port: 3000 };
+
+// Load from .env file
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['.env']
+});
+```
+
+### Multi-Source Loading
+
+Load from multiple sources with priority control (first source wins):
+
+```typescript
+// Priority: .env.local > .env > environment variables
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['.env.local', '.env', 'env']
+});
+
+// Priority: environment variables > .env
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['env', '.env']  // Default behavior
+});
+```
+
+### Default Behavior
+
+By default, auto-envparse loads from `['env', '.env']`:
+
+```typescript
+// These are equivalent:
+AutoEnvParse.parse(config, { prefix: 'APP' });
+AutoEnvParse.parse(config, { prefix: 'APP', sources: ['env', '.env'] });
+
+// Backward compatible with v2.0:
+AutoEnvParse.parse(config, 'APP');  // Also defaults to ['env', '.env']
+```
+
+### Custom Parser (Bring Your Own)
+
+Use your preferred parser like `dotenv`:
+
+```typescript
+import { parse } from 'dotenv';
+
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['.env'],
+    envFileParser: parse  // Use dotenv.parse
+});
+```
+
+### Built-in Parser
+
+When no `envFileParser` is provided, auto-envparse uses a lightweight built-in parser that supports:
+
+- `KEY=value` format
+- Comments starting with `#`
+- Quoted values (`"..."` or `'...'`)
+- Empty lines
+
+**Example .env file:**
+```bash
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME="my_database"
+DB_SSL=true
+```
+
+### Missing Files
+
+Missing files generate a warning but don't stop execution:
+
+```typescript
+// If .env.local doesn't exist, warning is logged and parsing continues
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['.env.local', '.env', 'env']
+});
+// Console: Warning: Environment file not found: .env.local
+```
 
 ---
 

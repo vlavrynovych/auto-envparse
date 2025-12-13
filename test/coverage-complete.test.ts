@@ -602,7 +602,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.VALUE = 'updated';
 
             // Call applyComplexObject with empty envVarName to trigger falsy branch
-            AutoEnvParseAny.applyComplexObject('test', '', obj);
+            AutoEnvParseAny.applyComplexObject('test', '', obj, process.env);
 
             expect(obj.value).toBe('updated');
 
