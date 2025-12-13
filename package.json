@@ -1,8 +1,8 @@
 {
   "name": "auto-envparse",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
-  "description": "✨ Automatic environment variable parsing with zero configuration and type inference",
+  "description": "⚡ Automatic environment variable parsing with zero configuration and type inference",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
