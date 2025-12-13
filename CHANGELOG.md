@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-12-13
+
+### Added
+
+**Transform Functions (#18):**
+- **`transform()` static method** - Create custom transformation functions for environment variable values
+- Support for external libraries (lodash, moment, etc.) for transformations
+- Graceful error handling with console warnings for failed transformations
+- Documentation in README.md and API.md with comprehensive examples
+
+**Nested Array Support (#19):**
+- **Dot-notation for arrays of objects** - Configure arrays using indexed env vars (e.g., `APP_SERVERS_0_HOST=value`)
+- **Multilevel nesting support** - Deep nesting in array elements (e.g., `APP_SERVICES_0_CONFIG_DATABASE_HOST=db.com`)
+- **Sparse array handling** - Non-contiguous indices automatically compacted (indices `0, 2, 5` → 3-element array)
+- **Priority system** - Dot-notation takes precedence over JSON when both formats exist
+- **Backward compatibility** - JSON format continues to work perfectly
+- **RegExp array support** - Automatically detected and handled via JSON only
+- **Empty array handling** - Empty arrays skipped (require template element for type inference)
+- Zero configuration - Works automatically with existing array properties
+
+**.env File Loading Support (#17):**
+- **`ParseOptions` interface** - Modern options-based API with `{ prefix, overrides, sources, envFileParser }`
+- **Multi-source loading** - Load from multiple sources with configurable priority (e.g., `sources: ['env', '.env', '.env.local']`)
+- **Priority system** - First source in array takes precedence (flexible override strategy)
+- **Default behavior** - Auto-loads from `['env', '.env']` by default
+- **Custom parsers** - "Bring your own parser" via `envFileParser` option (e.g., dotenv.parse)
+- **Built-in parser** - Lightweight fallback parser for basic .env files (supports KEY=value, comments, quotes)
+- **Missing file handling** - Warns via `console.warn()` when files not found (continues execution)
+- **Backward compatibility** - v2.0 API signature (`parse(target, prefix, overrides)`) still works perfectly
+- Zero dependencies by default - Use built-in parser or provide your own (dotenv, etc.)
+
+### Changed
+- **Test organization** (#17, #18) - Split monolithic 1390-line test file into 9 logical files:
+  - `test/parse-object.test.ts` (22 tests)
+  - `test/parse-class.test.ts` (13 tests)
+  - `test/overrides.test.ts` (15 tests - enumValidator + transform)
+  - `test/utilities.test.ts` (19 tests)
+  - `test/examples.test.ts` (2 tests)
+  - `test/coverage-complete.test.ts` (31 tests)
+  - `test/nested-arrays.test.ts` (21 tests)
+  - `test/env-file-loading.test.ts` (23 tests - new)
+  - `test/index.test.ts` (18 tests - existing)
+- **API signature** (#17) - `parse()` now accepts options object as second parameter (backward compatible with v2.0 signature)
+
+### Improved
+- **Code refactoring** (#17, #19) - Extracted helper methods for better maintainability:
+  - `detectArrayIndices()` - Scans environment for array index patterns
+  - `parseArrayElement()` - Parses individual array elements with type coercion
+  - `parseObjectPropertiesRecursive()` - Handles deep nesting in array elements
+  - `loadSources()` - Loads and merges environment variables from multiple sources
+  - `parseEnvFile()` - Built-in lightweight .env file parser
+- **Test coverage** - Maintained 99%+ coverage across all metrics (164 tests total)
+- **Documentation** - Comprehensive examples for transform functions, nested arrays, and .env file loading
+
+### Benefits
+- ✅ **More powerful transformations** - Leverage any external library for value processing
+- ✅ **Complex array configurations** - Configure arrays of objects naturally via environment variables
+- ✅ **.env file support** - Load configuration from .env files with zero dependencies
+- ✅ **Multi-source loading** - Flexible priority system for environment variable sources
+- ✅ **Better maintainability** - Well-organized test suite and cleaner codebase
+- ✅ **Zero breaking changes** - All existing code continues to work
+
 ## [2.0.0] - 2025-12-11
 
 ### BREAKING CHANGES
@@ -233,6 +295,7 @@ const config = AutoEnvParse.parse({ host: 'localhost' }, 'DB');
 - `toSnakeCase()` - Convert camelCase to snake_case
 - `coerceValue()` - Type coercion utility
 
+[2.1.0]: https://github.com/vlavrynovych/auto-envparse/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/vlavrynovych/auto-envparse/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/vlavrynovych/auto-envparse/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/vlavrynovych/auto-envparse/compare/v1.0.0...v1.1.0

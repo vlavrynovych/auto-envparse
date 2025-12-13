@@ -68,6 +68,10 @@ Perfect for existing codebases with class-based configuration.
 - 🔄 **Type Coercion** - String env vars → correct types (string, number, boolean, array)
 - 🐫 **Smart Naming** - Auto camelCase → SNAKE_CASE conversion
 - 🏗️ **Nested Objects** - Full support with dot-notation (e.g., `DB_POOL_MIN`)
+- 📋 **Nested Arrays** - Arrays of objects with dot-notation (e.g., `SERVERS_0_HOST`)
+- 📁 **.env File Loading** - Load from .env files with configurable priority
+- 🔀 **Multi-Source Support** - Merge variables from multiple sources (env, .env, .env.local)
+- 🔀 **Transform Functions** - Custom value transformations with external libraries
 - 🛠️ **Custom Overrides** - Add validation or custom parsing when needed
 - 📦 **Dual Package** - ESM and CommonJS support
 - 🎨 **TypeScript** - Full type safety included
@@ -193,6 +197,140 @@ Flexible boolean parsing (case-insensitive):
 - **Truthy**: `'true'`, `'1'`, `'yes'`, `'on'`
 - **Falsy**: Everything else
 
+### Nested Arrays
+
+Arrays of objects support both JSON and dot-notation formats. Dot-notation takes priority:
+
+**Dot-Notation Format** (Recommended):
+```typescript
+const config = {
+    servers: [{
+        host: 'localhost',
+        port: 3000
+    }]
+};
+
+// Environment variables:
+// APP_SERVERS_0_HOST=server1.com
+// APP_SERVERS_0_PORT=8080
+// APP_SERVERS_1_HOST=server2.com
+// APP_SERVERS_1_PORT=8081
+
+AutoEnvParse.parse(config, 'APP');
+// Result: servers = [
+//   { host: 'server1.com', port: 8080 },
+//   { host: 'server2.com', port: 8081 }
+// ]
+```
+
+**JSON Format** (Also supported):
+```typescript
+// APP_SERVERS='[{"host":"server1.com","port":8080}]'
+AutoEnvParse.parse(config, 'APP');
+```
+
+**Features**:
+- ✅ Multilevel nesting: `APP_SERVICES_0_CONFIG_DATABASE_HOST=db.com`
+- ✅ Sparse arrays: Indices `0, 2, 5` → compact array with 3 elements
+- ✅ Type coercion: String env vars → proper types in array elements
+- ✅ Empty arrays skipped (require template element)
+
+---
+
+## 📁 .env File Loading
+
+Load environment variables from `.env` files with configurable multi-source support:
+
+### Basic Usage
+
+```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
+const config = { host: 'localhost', port: 3000 };
+
+// Load from .env file
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['.env']
+});
+```
+
+### Multi-Source Loading
+
+Load from multiple sources with priority control (first source wins):
+
+```typescript
+// Priority: .env.local > .env > environment variables
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['.env.local', '.env', 'env']
+});
+
+// Priority: environment variables > .env
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['env', '.env']  // Default behavior
+});
+```
+
+### Default Behavior
+
+By default, auto-envparse loads from `['env', '.env']`:
+
+```typescript
+// These are equivalent:
+AutoEnvParse.parse(config, { prefix: 'APP' });
+AutoEnvParse.parse(config, { prefix: 'APP', sources: ['env', '.env'] });
+
+// Backward compatible with v2.0:
+AutoEnvParse.parse(config, 'APP');  // Also defaults to ['env', '.env']
+```
+
+### Custom Parser (Bring Your Own)
+
+Use your preferred parser like `dotenv`:
+
+```typescript
+import { parse } from 'dotenv';
+
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['.env'],
+    envFileParser: parse  // Use dotenv.parse
+});
+```
+
+### Built-in Parser
+
+When no `envFileParser` is provided, auto-envparse uses a lightweight built-in parser that supports:
+
+- `KEY=value` format
+- Comments starting with `#`
+- Quoted values (`"..."` or `'...'`)
+- Empty lines
+
+**Example .env file:**
+```bash
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME="my_database"
+DB_SSL=true
+```
+
+### Missing Files
+
+Missing files generate a warning but don't stop execution:
+
+```typescript
+// If .env.local doesn't exist, warning is logged and parsing continues
+AutoEnvParse.parse(config, {
+    prefix: 'APP',
+    sources: ['.env.local', '.env', 'env']
+});
+// Console: Warning: Environment file not found: .env.local
+```
+
 ---
 
 ## 🛠️ Custom Validation
@@ -247,6 +385,59 @@ AutoEnvParse.parse(config, 'APP', overrides);
 // ✅ Valid: APP_ENV=prod, APP_LOG=info, APP_REGION=us-west-2, APP_PROTOCOL=https
 // ❌ Invalid: APP_ENV=test (throws error - not in allowed list)
 // ❌ Invalid: APP_REGION=ap-south-1 (throws error - not in allowed list)
+```
+
+### Transform Functions
+
+Apply custom transformations to environment variable values before they're assigned. Perfect for data validation, formatting, or complex type conversions:
+
+```typescript
+import { AutoEnvParse } from 'auto-envparse';
+
+const config = {
+    timeout: 30000,
+    tags: [] as string[],
+    retries: 3
+};
+
+const overrides = new Map([
+    // Ensure minimum timeout value
+    ['timeout', AutoEnvParse.transform('timeout', (val) =>
+        Math.max(parseInt(val), 1000)
+    )],
+
+    // Split comma-separated values
+    ['tags', AutoEnvParse.transform('tags', (val) =>
+        val.split(',').map(t => t.trim())
+    )],
+
+    // Clamp retries between 1 and 10
+    ['retries', AutoEnvParse.transform('retries', (val) => {
+        const num = parseInt(val);
+        return Math.max(1, Math.min(num, 10));
+    })]
+]);
+
+AutoEnvParse.parse(config, 'APP', overrides);
+```
+
+**Use with external libraries** for complex transformations:
+
+```typescript
+import _ from 'lodash';
+import moment from 'moment';
+
+const overrides = new Map([
+    // Clamp with lodash
+    ['poolSize', AutoEnvParse.transform('poolSize', (val) =>
+        _.clamp(parseInt(val), 1, 100)
+    )],
+
+    // Parse dates with moment
+    ['startDate', AutoEnvParse.transform('startDate', (val) =>
+        moment(val).toDate()
+    )]
+]);
 ```
 
 ---

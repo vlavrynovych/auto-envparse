@@ -1,4 +1,65 @@
 /**
+ * Options for parsing environment variables.
+ */
+export interface ParseOptions<T = unknown> {
+    /**
+     * Environment variable prefix (e.g., 'DB', 'APP', 'REDIS').
+     * If not specified, uses unprefixed variable names.
+     */
+    prefix?: string;
+
+    /**
+     * Custom override functions for specific properties.
+     * Map keys are property names, values are custom parser functions.
+     */
+    overrides?: Map<string, (target: T, envVarName: string) => void>;
+
+    /**
+     * Sources to load environment variables from, in priority order.
+     * First source has highest priority.
+     *
+     * Special keyword: 'env' means process.env
+     * Other strings are treated as file paths to load.
+     *
+     * @default ['env', '.env']
+     *
+     * @example
+     * ```typescript
+     * // Use only process.env (v2.0 behavior)
+     * sources: ['env']
+     *
+     * // Multiple files with priority
+     * sources: ['env', '.env.local', '.env']
+     *
+     * // Environment-specific
+     * sources: ['env', `.env.${process.env.NODE_ENV}`, '.env']
+     * ```
+     */
+    sources?: Array<'env' | string>;
+
+    /**
+     * Custom parser function for .env files.
+     * Receives file content as string, returns key-value pairs.
+     *
+     * If not provided, uses built-in lightweight parser that supports:
+     * - KEY=value format
+     * - Comments (# comment)
+     * - Basic quotes ("value" or 'value')
+     * - Empty lines
+     *
+     * For advanced features (multiline, variable expansion), provide dotenv.parse:
+     * ```typescript
+     * import * as dotenv from 'dotenv';
+     * parse(config, { envFileParser: dotenv.parse })
+     * ```
+     *
+     * @param content - File content as string
+     * @returns Parsed key-value pairs
+     */
+    envFileParser?: (content: string) => Record<string, string>;
+}
+
+/**
  * Utility class for parsing environment variables and applying them to configuration objects.
  *
  * Provides automatic environment variable discovery and type coercion based on object structure.
@@ -9,6 +70,7 @@
  * - Type coercion (string, number, boolean)
  * - Nested object support with dot-notation
  * - Override system for custom parsing
+ * - .env file loading with configurable sources
  *
  * @example
  * ```typescript
@@ -16,6 +78,12 @@
  * const config = { host: 'localhost', port: 5432, ssl: false };
  * AutoEnvParse.parse(config, 'DB');
  * // Applies: DB_HOST, DB_PORT, DB_SSL
+ *
+ * // With .env files (v2.1+)
+ * AutoEnvParse.parse(config, {
+ *   prefix: 'DB',
+ *   sources: ['env', '.env.local', '.env']
+ * });
  *
  * // With overrides
  * const overrides = new Map();
@@ -33,7 +101,48 @@
  */
 export class AutoEnvParse {
     /**
-     * Parse environment variables and create an instance from a class constructor.
+     * Parse environment variables and create an instance from a class constructor (v2.1+ options API).
+     *
+     * @param classConstructor - Class constructor function with default values
+     * @param options - Parse options including prefix, overrides, sources, and envFileParser
+     * @returns New instance of the class populated from environment variables
+     *
+     * @example
+     * ```typescript
+     * class DbConfig { host = 'localhost'; port = 5432; }
+     * const config = AutoEnvParse.parse(DbConfig, {
+     *   prefix: 'DB',
+     *   sources: ['env', '.env.local', '.env']
+     * });
+     * ```
+     */
+    static parse<T extends { new(): object }>(
+        classConstructor: T,
+        options?: ParseOptions<InstanceType<T>>
+    ): InstanceType<T>;
+
+    /**
+     * Parse environment variables and apply them to a plain object (v2.1+ options API).
+     *
+     * @param target - Object to populate from environment variables
+     * @param options - Parse options including prefix, overrides, sources, and envFileParser
+     * @returns The populated object
+     *
+     * @example
+     * ```typescript
+     * const config = AutoEnvParse.parse({ host: 'localhost', port: 5432 }, {
+     *   prefix: 'DB',
+     *   sources: ['env', '.env']
+     * });
+     * ```
+     */
+    static parse<T extends object>(
+        target: T,
+        options?: ParseOptions<T>
+    ): T;
+
+    /**
+     * Parse environment variables and create an instance from a class constructor (v2.0 backward compatibility).
      *
      * @param classConstructor - Class constructor function with default values
      * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
@@ -54,7 +163,7 @@ export class AutoEnvParse {
     ): InstanceType<T>;
 
     /**
-     * Parse environment variables and apply them to a plain object.
+     * Parse environment variables and apply them to a plain object (v2.0 backward compatibility).
      *
      * @param target - Object to populate from environment variables
      * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
@@ -75,30 +184,55 @@ export class AutoEnvParse {
 
     /**
      * Unified parse implementation that handles both objects and class constructors.
-     * Uses runtime type detection to determine the appropriate parsing strategy.
+     * Supports both v2.0 (prefix, overrides) and v2.1+ (options) signatures.
      *
      * @param targetOrClass - Either a plain object or a class constructor
-     * @param prefix - Optional environment variable prefix
-     * @param overrides - Optional custom parsers for specific properties
+     * @param prefixOrOptions - Either prefix string (v2.0) or options object (v2.1+)
+     * @param overrides - Optional custom parsers (v2.0 only)
      * @returns The populated object or class instance
      */
     static parse(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         targetOrClass: any,
-        prefix: string = '',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        prefixOrOptions?: string | ParseOptions<any>,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         overrides?: Map<string, any>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): any {
+        // Detect signature: v2.0 (string prefix) or v2.1+ (options object)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let options: ParseOptions<any>;
+
+        if (typeof prefixOrOptions === 'string') {
+            // v2.0 signature: parse(target, prefix, overrides)
+            options = {
+                prefix: prefixOrOptions,
+                overrides,
+                sources: ['env', '.env']
+            };
+        } else {
+            // v2.1+ signature: parse(target, options)
+            options = prefixOrOptions || {};
+            // Default sources if not specified
+            if (!options.sources) {
+                options.sources = ['env', '.env'];
+            }
+        }
+
+        // Load and merge environment variables from all sources
+        // sources is guaranteed to be defined by the logic above
+        const mergedEnv = this.loadSources(options.sources!, options.envFileParser);
+
         // Runtime detection: is it a constructor function or a plain object?
         if (typeof targetOrClass === 'function') {
             // Class constructor path - create instance and parse it
             const instance = new targetOrClass();
-            this.parseObject(instance, prefix, overrides);
+            this.parseObject(instance, options.prefix || '', options.overrides, mergedEnv);
             return instance;
         } else {
             // Plain object path - parse and return it
-            this.parseObject(targetOrClass, prefix, overrides);
+            this.parseObject(targetOrClass, options.prefix || '', options.overrides, mergedEnv);
             return targetOrClass;
         }
     }
@@ -110,11 +244,13 @@ export class AutoEnvParse {
      * @param target - Object to populate from environment variables
      * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
      * @param overrides - Optional custom parsers for specific properties
+     * @param envSource - Source of environment variables (defaults to process.env)
      */
     private static parseObject<T extends object>(
         target: T,
         prefix: string = '',
-        overrides?: Map<string, (target: T, envVarName: string) => void>
+        overrides?: Map<string, (target: T, envVarName: string) => void>,
+        envSource: Record<string, string> = process.env as Record<string, string>
     ): void {
         // Validate prefix format if provided
         if (prefix && !/^[A-Z0-9]+$/.test(prefix)) {
@@ -140,18 +276,18 @@ export class AutoEnvParse {
             // Handle different types
             if (value === null || value === undefined) {
                 // For null/undefined, try to load as string if env var exists
-                this.applyPrimitive(target, key, envVarName);
+                this.applyPrimitive(target, key, envVarName, envSource);
             } else if (Array.isArray(value)) {
-                this.applyArray(target, key, envVarName);
+                this.applyArray(target, key, envVarName, envSource);
             } else if (this.isPlainObject(value)) {
                 // Plain object - use nested parsing
-                this.applyNestedObject(target, key, envVarName);
+                this.applyNestedObject(target, key, envVarName, envSource);
             } else if (typeof value === 'object') {
                 // Complex object (class instance)
-                this.applyComplexObject(key, envVarName, value);
+                this.applyComplexObject(key, envVarName, value, envSource);
             } else {
                 // Primitives (string, number, boolean)
-                this.applyPrimitive(target, key, envVarName);
+                this.applyPrimitive(target, key, envVarName, envSource);
             }
         }
     }
@@ -237,13 +373,15 @@ export class AutoEnvParse {
      * @param target - Target object
      * @param key - Property key
      * @param envVarName - Environment variable name
+     * @param envSource - Source of environment variables
      */
     private static applyPrimitive<T extends object, K extends keyof T>(
         target: T,
         key: K,
-        envVarName: string
+        envVarName: string,
+        envSource: Record<string, string>
     ): void {
-        const envValue = process.env[envVarName];
+        const envValue = envSource[envVarName];
         if (envValue !== undefined) {
             const currentValue = target[key];
             const valueType = currentValue === null || currentValue === undefined
@@ -254,31 +392,146 @@ export class AutoEnvParse {
     }
 
     /**
-     * Apply array value from environment variable (expects JSON format).
+     * Scan environment variables for array indices.
+     * Returns sorted array of indices found in env vars matching pattern: {envVarName}_{index}_*
      *
-     * Handles special cases like RegExp arrays.
+     * @param envVarName - Base environment variable name (e.g., 'APP_SERVERS')
+     * @param envSource - Source of environment variables
+     * @returns Sorted array of indices (e.g., [0, 1, 3] for sparse array)
+     */
+    private static detectArrayIndices(envVarName: string, envSource: Record<string, string>): number[] {
+        const indices = new Set<number>();
+        const pattern = new RegExp(`^${envVarName}_(\\d+)_`, 'i');
+
+        for (const key in envSource) {
+            const match = key.match(pattern);
+            if (match) {
+                indices.add(parseInt(match[1], 10));
+            }
+        }
+
+        // Return sorted indices for compact array (handles sparse arrays)
+        return Array.from(indices).sort((a, b) => a - b);
+    }
+
+    /**
+     * Parse array element from environment variables using dot-notation.
+     * Recursively applies parsing to nested objects within array elements.
+     *
+     * @param envVarName - Base environment variable name for this array element
+     * @param template - Template object to clone and populate
+     * @param envSource - Source of environment variables
+     * @returns Parsed array element
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private static parseArrayElement(envVarName: string, template: any, envSource: Record<string, string>): any {
+        // Clone template to avoid mutating original
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let element: any;
+
+        if (typeof template === 'object' && template !== null && !Array.isArray(template)) {
+            // Object element - clone and recursively parse
+            element = JSON.parse(JSON.stringify(template));
+
+            // Use recursive helper to parse all nested properties
+            this.parseObjectPropertiesRecursive(element, envVarName, template, envSource);
+        } else {
+            // Primitive or array - keep template value
+            element = template;
+        }
+
+        return element;
+    }
+
+    /**
+     * Recursively parse object properties from environment variables.
+     * Helper method used by parseArrayElement for deep nesting support.
+     *
+     * @param target - Target object to populate
+     * @param envVarName - Base environment variable name
+     * @param template - Template object for type inference
+     * @param envSource - Source of environment variables
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private static parseObjectPropertiesRecursive(target: any, envVarName: string, template: any, envSource: Record<string, string>): void {
+        for (const key in target) {
+            if (!Object.prototype.hasOwnProperty.call(target, key)) {
+                continue;
+            }
+
+            const templateValue = template[key];
+            const snakeKey = this.toSnakeCase(key).toUpperCase();
+            const propertyEnvVarName = `${envVarName}_${snakeKey}`;
+            const propertyEnvValue = envSource[propertyEnvVarName];
+
+            if (typeof templateValue === 'object' && templateValue !== null && !Array.isArray(templateValue)) {
+                // Nested object - recurse
+                this.parseObjectPropertiesRecursive(target[key], propertyEnvVarName, templateValue, envSource);
+            } else if (propertyEnvValue !== undefined && propertyEnvValue !== '') {
+                // Primitive value - apply coercion
+                target[key] = this.coerceValue(propertyEnvValue, typeof templateValue);
+            }
+        }
+    }
+
+    /**
+     * Apply array value from environment variable.
+     *
+     * Supports both dot-notation and JSON formats. Dot-notation takes priority.
+     * For dot-notation: APP_SERVERS_0_HOST=value, APP_SERVERS_1_HOST=value
+     * For JSON: APP_SERVERS='[{"host":"value"}]'
+     *
+     * Handles special cases like RegExp arrays (JSON only).
      * Note: RegExp detection only checks if ALL elements in the default array are RegExp instances.
      *
      * @param target - Target object
      * @param key - Property key
      * @param envVarName - Environment variable name
+     * @param envSource - Source of environment variables
      */
     private static applyArray<T extends object, K extends keyof T>(
         target: T,
         key: K,
-        envVarName: string
+        envVarName: string,
+        envSource: Record<string, string>
     ): void {
-        const envValue = process.env[envVarName];
+        const currentArray = target[key];
+        if (!Array.isArray(currentArray) || currentArray.length === 0) {
+            // Empty array - skip (no template to infer from)
+            return;
+        }
+
+        // Check if this is a RegExp array (only support JSON for RegExp)
+        const isRegExpArray = currentArray.every(item => item instanceof RegExp);
+
+        // Try dot-notation first (unless RegExp array)
+        if (!isRegExpArray) {
+            const indices = this.detectArrayIndices(envVarName, envSource);
+            if (indices.length > 0) {
+                // Dot-notation found - parse array elements
+                const template = currentArray[0];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const newArray: any[] = [];
+
+                for (const index of indices) {
+                    const elementEnvVarName = `${envVarName}_${index}`;
+                    const element = this.parseArrayElement(elementEnvVarName, template, envSource);
+                    newArray.push(element);
+                }
+
+                target[key] = newArray as T[K];
+                return;
+            }
+        }
+
+        // Fall back to JSON parsing (existing behavior)
+        const envValue = envSource[envVarName];
         if (envValue) {
             try {
                 const parsed = JSON.parse(envValue);
                 if (Array.isArray(parsed)) {
                     // Handle special cases (like RegExp arrays)
-                    // Check if ALL elements in the current array are RegExp instances
-                    const currentArray = target[key];
-                    if (Array.isArray(currentArray) &&
-                        currentArray.length > 0 &&
-                        currentArray.every(item => item instanceof RegExp)) {
+                    if (isRegExpArray) {
                         target[key] = parsed.map(p => new RegExp(p)) as T[K];
                     } else {
                         target[key] = parsed as T[K];
@@ -299,11 +552,13 @@ export class AutoEnvParse {
      * @param target - Target object
      * @param key - Property key
      * @param envVarName - Environment variable name
+     * @param envSource - Source of environment variables
      */
     private static applyNestedObject<T extends object, K extends keyof T>(
         target: T,
         key: K,
-        envVarName: string
+        envVarName: string,
+        envSource: Record<string, string>
     ): void {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const value = target[key] as any;
@@ -317,7 +572,7 @@ export class AutoEnvParse {
         }
 
         // Try JSON first
-        const envValue = process.env[envVarName];
+        const envValue = envSource[envVarName];
         if (envValue) {
             try {
                 const parsed = JSON.parse(envValue);
@@ -330,7 +585,7 @@ export class AutoEnvParse {
             }
         }
         // Then apply dot-notation (takes precedence)
-        target[key] = this.loadNestedFromEnv(envVarName, value) as T[K];
+        target[key] = this.loadNestedFromEnv(envVarName, value, envSource) as T[K];
     }
 
     /**
@@ -343,12 +598,14 @@ export class AutoEnvParse {
      * @param key - Property key (used for error messages)
      * @param envVarName - Environment variable name
      * @param value - Current property value
+     * @param envSource - Source of environment variables
      */
     private static applyComplexObject<K extends PropertyKey>(
         key: K,
         envVarName: string,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        value: any
+        value: any,
+        envSource: Record<string, string>
     ): void {
         // Defensive check - should never happen if called correctly from parse()
         if (typeof value !== 'object' || value === null) {
@@ -359,7 +616,7 @@ export class AutoEnvParse {
         }
 
         // Try JSON first
-        const envValue = process.env[envVarName];
+        const envValue = envSource[envVarName];
         if (envValue) {
             try {
                 const parsed = JSON.parse(envValue);
@@ -380,11 +637,11 @@ export class AutoEnvParse {
             const nestedProp = value[nestedKey];
             const snakeNestedKey = this.toSnakeCase(nestedKey).toUpperCase();
             const nestedEnvKey = envVarName ? `${envVarName}_${snakeNestedKey}` : snakeNestedKey;
-            const nestedEnvValue = process.env[nestedEnvKey];
+            const nestedEnvValue = envSource[nestedEnvKey];
 
             // Handle nested objects recursively
             if (typeof nestedProp === 'object' && nestedProp !== null && !Array.isArray(nestedProp)) {
-                this.applyComplexObject(nestedKey, nestedEnvKey, nestedProp);
+                this.applyComplexObject(nestedKey, nestedEnvKey, nestedProp, envSource);
             } else if (nestedEnvValue !== undefined && nestedEnvValue !== '') {
                 // Handle primitives - empty string means "no value set", keep default
                 const nestedType = typeof nestedProp;
@@ -404,6 +661,7 @@ export class AutoEnvParse {
      *
      * @param prefix - Optional prefix for environment variables (e.g., 'APP_LOGGING'). Defaults to empty string.
      * @param defaultValue - Default object structure with types (will be deep cloned)
+     * @param envSource - Source of environment variables (defaults to process.env)
      * @returns New object built from env vars or default value
      *
      * @example
@@ -428,7 +686,8 @@ export class AutoEnvParse {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     static loadNestedFromEnv<T extends Record<string, any>>(
         prefix: string = '',
-        defaultValue: T
+        defaultValue: T,
+        envSource: Record<string, string> = process.env as Record<string, string>
     ): T {
         // Deep clone to avoid mutation of the original default value
         const result = JSON.parse(JSON.stringify(defaultValue));
@@ -441,12 +700,12 @@ export class AutoEnvParse {
             const value = defaultValue[key];
             // Convert camelCase to SNAKE_CASE for env var name
             const envKey = this.buildEnvVarName(prefix, key);
-            const envValue = process.env[envKey];
+            const envValue = envSource[envKey];
 
             // Check if this property is a plain nested object
             if (this.isPlainObject(value)) {
                 // Recursively process nested plain objects
-                result[key] = this.loadNestedFromEnv(envKey, value) as T[Extract<keyof T, string>];
+                result[key] = this.loadNestedFromEnv(envKey, value, envSource) as T[Extract<keyof T, string>];
             } else if (envValue !== undefined && envValue !== '') {
                 // Empty string means "no value set", keep default
                 const defaultType = typeof value;
@@ -626,5 +885,167 @@ export class AutoEnvParse {
                 );
             }
         };
+    }
+
+    /**
+     * Create a transform function for use with overrides.
+     *
+     * Returns a function that applies a custom transformation to environment variable values.
+     * The transform function receives the raw string value from the environment variable
+     * and returns the transformed value of any type.
+     *
+     * @param propertyKey - The property key to transform (must match the key in overrides Map)
+     * @param fn - Transform function that takes a string and returns the transformed value
+     * @returns Override function for use with parse()
+     *
+     * @example
+     * ```typescript
+     * import { AutoEnvParse } from 'auto-envparse';
+     *
+     * const config = {
+     *     timeout: 30000,
+     *     tags: [] as string[]
+     * };
+     *
+     * const overrides = new Map([
+     *     // Ensure minimum timeout value
+     *     ['timeout', AutoEnvParse.transform('timeout', (val) =>
+     *         Math.max(parseInt(val), 1000)
+     *     )],
+     *
+     *     // Split comma-separated values
+     *     ['tags', AutoEnvParse.transform('tags', (val) =>
+     *         val.split(',').map(t => t.trim())
+     *     )],
+     * ]);
+     *
+     * AutoEnvParse.parse(config, 'APP', overrides);
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Using lodash for complex transformations
+     * import _ from 'lodash';
+     *
+     * const overrides = new Map([
+     *     ['retries', AutoEnvParse.transform('retries', (val) =>
+     *         _.clamp(parseInt(val), 1, 10)
+     *     )],
+     * ]);
+     * ```
+     */
+    static transform<T extends object>(
+        propertyKey: string,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        fn: (value: string) => any
+    ): (target: T, envVarName: string) => void {
+        return (target: T, envVarName: string) => {
+            const value = process.env[envVarName];
+
+            if (value !== undefined) {
+                try {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (target as any)[propertyKey] = fn(value);
+                } catch (error) {
+                    const errorMsg = error instanceof Error ? error.message : String(error);
+                    console.warn(`Warning: Transform failed for ${envVarName}: ${errorMsg}`);
+                }
+            }
+        };
+    }
+
+    /**
+     * Built-in lightweight .env file parser.
+     * Supports: KEY=value, comments (#), basic quotes, empty lines.
+     * Does NOT support: multiline values, variable expansion, command substitution.
+     *
+     * @param content - File content as string
+     * @returns Parsed key-value pairs
+     */
+    private static parseEnvFile(content: string): Record<string, string> {
+        const result: Record<string, string> = {};
+        const lines = content.split('\n');
+
+        for (const line of lines) {
+            // Skip empty lines and comments
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) {
+                continue;
+            }
+
+            // Find first = sign
+            const eqIndex = trimmed.indexOf('=');
+            if (eqIndex === -1) {
+                continue; // Skip invalid lines
+            }
+
+            const key = trimmed.substring(0, eqIndex).trim();
+            let value = trimmed.substring(eqIndex + 1).trim();
+
+            // Remove quotes if present
+            if ((value.startsWith('"') && value.endsWith('"')) ||
+                (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.substring(1, value.length - 1);
+            }
+
+            result[key] = value;
+        }
+
+        return result;
+    }
+
+    /**
+     * Load and merge environment variables from multiple sources.
+     * Sources are applied in reverse order (first source has highest priority).
+     *
+     * @param sources - Array of sources ('env' or file paths)
+     * @param envFileParser - Optional custom parser for .env files
+     * @returns Merged environment variables
+     */
+    private static loadSources(
+        sources: Array<'env' | string>,
+        envFileParser?: (content: string) => Record<string, string>
+    ): Record<string, string> {
+        // Use provided parser or built-in parser
+        const parser = envFileParser || this.parseEnvFile.bind(this);
+
+        // Start with empty environment
+        const merged: Record<string, string> = {};
+
+        // Apply sources in REVERSE order (so first source wins)
+        for (let i = sources.length - 1; i >= 0; i--) {
+            const source = sources[i];
+
+            if (source === 'env') {
+                // Load from process.env
+                Object.assign(merged, process.env);
+            } else {
+                // Load from file
+                try {
+                    // eslint-disable-next-line @typescript-eslint/no-require-imports
+                    const fs = require('fs');
+                    // eslint-disable-next-line @typescript-eslint/no-require-imports
+                    const path = require('path');
+
+                    // Resolve file path relative to cwd
+                    const filePath = path.resolve(process.cwd(), source);
+
+                    // Check if file exists
+                    if (fs.existsSync(filePath)) {
+                        const content = fs.readFileSync(filePath, 'utf8');
+                        const parsed = parser(content);
+                        Object.assign(merged, parsed);
+                    } else {
+                        // Warn about missing file
+                        console.warn(`Warning: Environment file not found: ${source}`);
+                    }
+                } catch (error) {
+                    const errorMsg = error instanceof Error ? error.message : String(error);
+                    console.warn(`Warning: Failed to load environment file ${source}: ${errorMsg}`);
+                }
+            }
+        }
+
+        return merged;
     }
 }

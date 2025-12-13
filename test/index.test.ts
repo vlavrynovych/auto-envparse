@@ -209,6 +209,7 @@ describe('Index Exports - v2.0 API', () => {
             expect(typeof AutoEnvParse.coerceValue).toBe('function');
             expect(typeof AutoEnvParse.loadNestedFromEnv).toBe('function');
             expect(typeof AutoEnvParse.enumValidator).toBe('function');
+            expect(typeof AutoEnvParse.transform).toBe('function');
 
             // Verify they work
             expect(AutoEnvParse.parseBoolean('true')).toBe(true);
@@ -232,6 +233,26 @@ describe('Index Exports - v2.0 API', () => {
             const result = AutoEnvParse.parse(config, 'TEST', overrides);
 
             expect(result.environment).toBe('production');
+        });
+
+        it('should use transform with parse()', () => {
+            const config = {
+                timeout: 30000,
+                tags: [] as string[]
+            };
+
+            const overrides = new Map([
+                ['timeout', AutoEnvParse.transform('timeout', (val) => Math.max(parseInt(val), 1000))],
+                ['tags', AutoEnvParse.transform('tags', (val) => val.split(',').map(t => t.trim()))]
+            ]);
+
+            process.env.TEST_TIMEOUT = '500';
+            process.env.TEST_TAGS = 'tag1, tag2, tag3';
+
+            const result = AutoEnvParse.parse(config, 'TEST', overrides);
+
+            expect(result.timeout).toBe(1000);
+            expect(result.tags).toEqual(['tag1', 'tag2', 'tag3']);
         });
 
         it('should use parseNumber in custom override with parse()', () => {
