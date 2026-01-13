@@ -55,7 +55,7 @@ describe('AutoEnvParse - Real-world Examples', () => {
         process.env.DB_POOL_MIN = '5';
         process.env.DB_POOL_MAX = '50';
 
-        AutoEnvParse.parse(dbConfig, 'DB');
+        AutoEnvParse.parse(dbConfig, { prefix: 'DB' });
 
         expect(dbConfig.host).toBe('prod-db.example.com');
         expect(dbConfig.port).toBe(5433);
@@ -87,7 +87,7 @@ describe('AutoEnvParse - Real-world Examples', () => {
         process.env.APP_CORS_ORIGIN = 'https://example.com';
         process.env.APP_RATE_LIMIT_MAX = '1000';
 
-        AutoEnvParse.parse(appConfig, 'APP');
+        AutoEnvParse.parse(appConfig, { prefix: 'APP' });
 
         expect(appConfig.port).toBe(8080);
         expect(appConfig.debug).toBe(true);

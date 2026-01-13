@@ -438,7 +438,7 @@ TEST_PORT=9000
             process.env.TEST_HOST = 'v2host.com';
             const config = { host: 'localhost' };
 
-            const result = AutoEnvParse.parse(config, 'TEST');
+            const result = AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(result.host).toBe('v2host.com');
         });
@@ -450,7 +450,7 @@ TEST_PORT=9000
             const config = { host: 'localhost' };
 
             // This will try to load .env by default
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // Should warn about missing .env (unless it exists)
             // This verifies that .env loading is attempted

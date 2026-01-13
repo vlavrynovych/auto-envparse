@@ -42,7 +42,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_OWN = 'updated';
             process.env.TEST_INHERITED = 'should-not-apply';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.own).toBe('updated');
             // Inherited property should not be modified
@@ -62,7 +62,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             // Provide valid JSON that will be parsed and assigned
             process.env.TEST_DATABASE = '{"host":"json-host","port":9999,"extra":"value"}';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // JSON should be applied via Object.assign
             expect(config.database.host).toBe('json-host');
@@ -85,7 +85,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             // Provide valid JSON that will be parsed and assigned
             process.env.TEST_DB = '{"host":"json-complex","port":7777}';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // JSON should be applied via Object.assign
             expect(config.db.host).toBe('json-complex');
@@ -111,7 +111,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_COMPLEX_INNER_VALUE = 'inner-updated';
             process.env.TEST_COMPLEX_OUTER = 'outer-updated';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.complex.inner.value).toBe('inner-updated');
             expect(config.complex.outer).toBe('outer-updated');
@@ -140,7 +140,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_ROOT_LEVEL2_MID_VALUE = 'mid-updated';
             process.env.TEST_ROOT_TOP_VALUE = 'top-updated';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.root.level2.level3.deepValue).toBe('deep-updated');
             expect(config.root.level2.midValue).toBe('mid-updated');
@@ -204,7 +204,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
 
             process.env.TEST_NESTED_VALUE = '';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // Empty string should be treated as "not set"
             expect(config.nested.value).toBe('default');
@@ -228,7 +228,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
 
             // Should not throw because parse() checks type before calling applyNestedObject
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST');
+                AutoEnvParse.parse(config, { prefix: 'TEST' });
             }).not.toThrow();
         });
 
@@ -245,7 +245,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
 
             // Should not throw because parse() checks type before calling applyComplexObject
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST');
+                AutoEnvParse.parse(config, { prefix: 'TEST' });
             }).not.toThrow();
         });
     });
@@ -258,7 +258,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
 
             process.env.TEST_MIXED = '[10, "updated", false]';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.mixed).toEqual([10, 'updated', false]);
         });
@@ -270,7 +270,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
 
             process.env.TEST_EMPTY = '[]';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.empty).toEqual([]);
         });
@@ -305,7 +305,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_PLAIN_VALUE = 'updated-plain';
             process.env.TEST_ANOTHER_PLAIN_DATA = 'updated-another';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.plain.value).toBe('updated-plain');
             expect(config.anotherPlain.data).toBe('updated-another');
@@ -324,7 +324,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_SIMPLE = 'updated-simple';
             process.env.TEST_NESTED_PROP = 'updated-nested';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.simple).toBe('updated-simple');
             expect(config.nested.prop).toBe('updated-nested');
@@ -338,7 +338,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env['123_VALUE'] = 'updated';
 
             expect(() => {
-                AutoEnvParse.parse(config, '123');
+                AutoEnvParse.parse(config, { prefix: '123' });
             }).not.toThrow();
 
             expect(config.value).toBe('updated');
@@ -350,7 +350,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.DB2_VALUE = 'updated';
 
             expect(() => {
-                AutoEnvParse.parse(config, 'DB2');
+                AutoEnvParse.parse(config, { prefix: 'DB2' });
             }).not.toThrow();
 
             expect(config.value).toBe('updated');
@@ -377,7 +377,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_COMPLEX_BASE_VALUE = 'base-updated';
             process.env.TEST_COMPLEX_CHILD_VALUE = 'child-updated';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // In JavaScript class fields, all properties become "own" properties on instances
             // So both should be updated
@@ -402,7 +402,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_COMPLEX_OWN = 'own-updated';
             process.env.TEST_COMPLEX_BASE = 'base-updated';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.complex.own).toBe('own-updated');
             // Prototype property should NOT be updated (continue statement hits here)
@@ -470,7 +470,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_NESTED_VALUE = 'updated';
 
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST');
+                AutoEnvParse.parse(config, { prefix: 'TEST' });
             }).not.toThrow();
         });
 
@@ -486,7 +486,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_TEST_VALUE = 'updated';
 
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST');
+                AutoEnvParse.parse(config, { prefix: 'TEST' });
             }).not.toThrow();
         });
 
@@ -500,7 +500,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
 
             // Should handle null gracefully
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST');
+                AutoEnvParse.parse(config, { prefix: 'TEST' });
             }).not.toThrow();
         });
 
@@ -526,7 +526,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             // The getter changes value between type check and method call
             // This triggers the defensive error check
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST');
+                AutoEnvParse.parse(config, { prefix: 'TEST' });
             }).toThrow(/Internal error: applyNestedObject called with non-plain-object/);
         });
 
@@ -549,7 +549,7 @@ describe('AutoEnvParse - Complete Coverage', () => {
             process.env.TEST_TRICKY_NESTED = 'test';
 
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST');
+                AutoEnvParse.parse(config, { prefix: 'TEST' });
             }).toThrow(/Expected plain object, got null/);
         });
 
