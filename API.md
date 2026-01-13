@@ -1,6 +1,6 @@
 # API Documentation
 
-Complete API reference for auto-envparse v2.0.
+Complete API reference for auto-envparse v3.0.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ auto-envparse provides a single class export with two methods you'll commonly us
 ```typescript
 import { AutoEnvParse } from 'auto-envparse';
 
-AutoEnvParse.parse(config, 'DB');
+AutoEnvParse.parse(config, { prefix: 'DB' });
 ```
 
 ### Default Export
@@ -34,7 +34,7 @@ AutoEnvParse.parse(config, 'DB');
 ```typescript
 import AEP from 'auto-envparse';
 
-AEP.parse(config, 'DB');
+AEP.parse(config, { prefix: 'DB' });
 ```
 
 ---
@@ -47,13 +47,48 @@ The main class containing all parsing functionality.
 
 Unified method that handles both plain objects and class constructors. Uses TypeScript overloads to provide excellent type inference.
 
+#### ParseOptions Interface
+
+The `ParseOptions` interface allows you to configure how environment variables are parsed:
+
+```typescript
+interface ParseOptions<T = unknown> {
+    prefix?: string;
+    overrides?: Map<string, (target: T, envVarName: string) => void>;
+    sources?: Array<'env' | string>;
+    envFileParser?: (content: string) => Record<string, string>;
+}
+```
+
+**Options:**
+- **prefix**: `string` *(optional)*
+  - Environment variable prefix (e.g., `'DB'`, `'APP'`, `'REDIS'`)
+  - Must be uppercase letters and numbers only
+  - **Default**: `''` (empty string - no prefix)
+
+- **overrides**: `Map<string, (target: T, envVarName: string) => void>` *(optional)*
+  - Custom parsers for specific properties
+  - Map keys are property names (camelCase)
+  - Map values are validator/parser functions
+
+- **sources**: `Array<'env' | string>` *(optional)*
+  - Sources to load environment variables from, in priority order
+  - First source has highest priority
+  - Special keyword `'env'` means `process.env`
+  - Other strings are treated as file paths
+  - **Default**: `['env', '.env']`
+
+- **envFileParser**: `(content: string) => Record<string, string>` *(optional)*
+  - Custom parser for .env files
+  - Receives file content as string, returns key-value pairs
+  - If not provided, uses built-in lightweight parser
+
 #### Overload 1: Class Constructor
 
 ```typescript
 static parse<T extends { new(): object }>(
     classConstructor: T,
-    prefix?: string,
-    overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
+    options?: ParseOptions<InstanceType<T>>
 ): InstanceType<T>
 ```
 
@@ -64,15 +99,8 @@ Creates a new instance from a class constructor and populates it with environmen
   - A class constructor function with default values
   - Must be a class with a no-argument constructor
 
-- **prefix**: `string` *(optional)*
-  - Environment variable prefix (e.g., `'DB'`, `'APP'`, `'REDIS'`)
-  - Must be uppercase letters and numbers only
-  - **Default**: `''` (empty string - no prefix)
-
-- **overrides**: `Map<string, (target: InstanceType<T>, envVarName: string) => void>` *(optional)*
-  - Custom parsers for specific properties
-  - Map keys are property names (camelCase)
-  - Map values are validator/parser functions
+- **options**: `ParseOptions<InstanceType<T>>` *(optional)*
+  - Configuration options (see ParseOptions above)
 
 **Returns:** `InstanceType<T>` - A new instance of the class with environment variables applied
 
@@ -92,7 +120,7 @@ class DatabaseConfig {
 }
 
 // Environment: DB_HOST=prod.example.com, DB_PORT=5433, DB_SSL=true
-const config = AutoEnvParse.parse(DatabaseConfig, 'DB');
+const config = AutoEnvParse.parse(DatabaseConfig, { prefix: 'DB' });
 
 console.log(config.host);                    // 'prod.example.com'
 console.log(config.getConnectionString());   // 'prod.example.com:5433'
@@ -104,8 +132,7 @@ console.log(config instanceof DatabaseConfig); // true
 ```typescript
 static parse<T extends object>(
     target: T,
-    prefix?: string,
-    overrides?: Map<string, (target: T, envVarName: string) => void>
+    options?: ParseOptions<T>
 ): T
 ```
 
@@ -117,13 +144,8 @@ Populates a plain object with environment variables.
   - Modified in-place and also returned
   - Can be any plain object
 
-- **prefix**: `string` *(optional)*
-  - Environment variable prefix (e.g., `'DB'`, `'APP'`, `'REDIS'`)
-  - Must be uppercase letters and numbers only
-  - **Default**: `''` (empty string - no prefix)
-
-- **overrides**: `Map<string, (target: T, envVarName: string) => void>` *(optional)*
-  - Custom parsers for specific properties
+- **options**: `ParseOptions<T>` *(optional)*
+  - Configuration options (see ParseOptions above)
 
 **Returns:** `T` - The same object that was passed in (modified in-place)
 
@@ -140,7 +162,7 @@ const config = {
 };
 
 // Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
-const result = AutoEnvParse.parse(config, 'DB');
+const result = AutoEnvParse.parse(config, { prefix: 'DB' });
 
 console.log(result === config);  // true (same object)
 console.log(config.host);        // 'example.com'
@@ -161,7 +183,7 @@ const config = {
     HTTPSEnabled: false
 };
 
-AutoEnvParse.parse(config, 'APP');
+AutoEnvParse.parse(config, { prefix: 'APP' });
 
 // Looks for environment variables:
 // APP_API_URL
@@ -219,7 +241,7 @@ const config = {
 // APP_DATABASE_PORT=5433
 // APP_DATABASE_POOL_MIN=5
 // APP_DATABASE_POOL_MAX=20
-AutoEnvParse.parse(config, 'APP');
+AutoEnvParse.parse(config, { prefix: 'APP' });
 
 console.log(config.database.host);      // 'prod.example.com'
 console.log(config.database.pool.min);  // 5
@@ -244,7 +266,7 @@ const config = {
 // APP_SERVERS_1_HOST=server2.com
 // APP_SERVERS_1_PORT=8081
 
-AutoEnvParse.parse(config, 'APP');
+AutoEnvParse.parse(config, { prefix: 'APP' });
 
 console.log(config.servers);
 // [
@@ -274,7 +296,7 @@ const config = {
 // APP_SERVICES_1_CONFIG_DATABASE_HOST=db2.com
 // APP_SERVICES_1_CONFIG_DATABASE_PORT=5434
 
-AutoEnvParse.parse(config, 'APP');
+AutoEnvParse.parse(config, { prefix: 'APP' });
 
 console.log(config.services[0].config.database.host); // 'db1.com'
 ```
@@ -282,7 +304,7 @@ console.log(config.services[0].config.database.host); // 'db1.com'
 **JSON Format** (also supported):
 ```typescript
 // APP_SERVERS='[{"host":"server1.com","port":8080}]'
-AutoEnvParse.parse(config, 'APP');
+AutoEnvParse.parse(config, { prefix: 'APP' });
 ```
 
 **Features**:
@@ -342,7 +364,7 @@ overrides.set('timeout', (obj, envVar) => {
     }
 });
 
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 ```
 
 ---
@@ -396,7 +418,7 @@ overrides.set('environment',
 );
 
 // Environment: APP_ENVIRONMENT=production
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 
 console.log(config.environment); // 'production'
 
@@ -424,7 +446,7 @@ const overrides = new Map([
     ['protocol', AutoEnvParse.enumValidator('protocol', ['http', 'https'])],
 ]);
 
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 ```
 
 #### Example: Case-Insensitive Validation
@@ -442,7 +464,7 @@ overrides.set('logLevel',
 );
 
 // Environment: APP_LOG_LEVEL=DEBUG (any case works)
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 
 console.log(config.logLevel); // 'debug' (normalized to lowercase from allowedValues)
 ```
@@ -507,7 +529,7 @@ const overrides = new Map([
 ]);
 
 // Environment: APP_TIMEOUT=500, APP_TAGS=alpha,beta,gamma, APP_RETRIES=15
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 
 console.log(config.timeout); // 1000 (clamped to minimum)
 console.log(config.tags);    // ['alpha', 'beta', 'gamma']
@@ -552,7 +574,7 @@ const overrides = new Map([
 // APP_POOL_SIZE=150
 // APP_START_DATE=2024-12-25
 // APP_ALLOWED_IPS=192.168.1.1, invalid, 10.0.0.1
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 
 console.log(config.poolSize);    // 100 (clamped by lodash)
 console.log(config.startDate);   // Date object for 2024-12-25
@@ -571,7 +593,7 @@ const overrides = new Map([
 ]);
 
 // Environment: APP_METADATA={"version":"1.0","enabled":true}
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 
 console.log(config.metadata); // { version: '1.0', enabled: true }
 ```
@@ -593,7 +615,7 @@ const overrides = new Map([
 ]);
 
 // Environment: APP_DATA=invalid-json
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 // Logs: Warning: Transform failed for APP_DATA: Unexpected token 'i'...
 
 console.log(config.data); // null (default value preserved)
@@ -742,7 +764,7 @@ const config: DatabaseConfig = {
     ssl: false
 };
 
-AutoEnvParse.parse(config, 'DB');
+AutoEnvParse.parse(config, { prefix: 'DB' });
 
 // TypeScript ensures all properties are typed correctly
 ```
@@ -756,7 +778,7 @@ const overrides = new Map([
     ['environment', AutoEnvParse.enumValidator('environment', ['dev', 'staging', 'prod'])],
 ]);
 
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 ```
 
 ### 3. Use Classes for Complex Configuration
@@ -777,7 +799,7 @@ class AppConfig {
     }
 }
 
-const config = AutoEnvParse.parse(AppConfig, 'APP');
+const config = AutoEnvParse.parse(AppConfig, { prefix: 'APP' });
 console.log(config.getUrl());
 ```
 
@@ -801,13 +823,13 @@ Group related environment variables with prefixes:
 
 ```typescript
 // Database configuration
-const dbConfig = AutoEnvParse.parse({ host: 'localhost', port: 5432 }, 'DB');
+const dbConfig = AutoEnvParse.parse({ host: 'localhost', port: 5432 }, { prefix: 'DB' });
 
 // Redis configuration
-const redisConfig = AutoEnvParse.parse({ host: 'localhost', port: 6379 }, 'REDIS');
+const redisConfig = AutoEnvParse.parse({ host: 'localhost', port: 6379 }, { prefix: 'REDIS' });
 
 // App configuration
-const appConfig = AutoEnvParse.parse({ port: 3000, debug: false }, 'APP');
+const appConfig = AutoEnvParse.parse({ port: 3000, debug: false }, { prefix: 'APP' });
 ```
 
 ---
@@ -818,7 +840,7 @@ const appConfig = AutoEnvParse.parse({ port: 3000, debug: false }, 'APP');
 
 ```typescript
 // Throws: Error: Invalid prefix "db-app". Use uppercase letters and numbers only.
-AutoEnvParse.parse(config, 'db-app');
+AutoEnvParse.parse(config, { prefix: 'db-app' });
 ```
 
 Prefixes must match: `/^[A-Z0-9]+$/`
@@ -832,7 +854,7 @@ const overrides = new Map([
 
 // Environment: APP_ENV=staging
 // Throws: Error: Invalid value for APP_ENV: "staging". Must be one of: dev, prod
-AutoEnvParse.parse(config, 'APP', overrides);
+AutoEnvParse.parse(config, { prefix: 'APP', overrides });
 ```
 
 ### Invalid JSON
@@ -845,7 +867,7 @@ const config = {
 // Environment: APP_DATA='invalid json'
 // Logs: Warning: Invalid APP_DATA JSON. Using dot-notation if available.
 // Falls back to dot-notation: APP_DATA_KEY
-AutoEnvParse.parse(config, 'APP');
+AutoEnvParse.parse(config, { prefix: 'APP' });
 ```
 
 ---
@@ -873,8 +895,8 @@ const instance = createFrom(DbClass, 'DB');
 AutoEnv.parseBoolean('true');
 
 // v2.0 - Unified method
-AutoEnvParse.parse(config, 'DB');
-const instance = AutoEnvParse.parse(DbClass, 'DB');
+AutoEnvParse.parse(config, { prefix: 'DB' });
+const instance = AutoEnvParse.parse(DbClass, { prefix: 'DB' });
 AutoEnvParse.parseBoolean('true');
 ```
 
@@ -887,7 +909,7 @@ parseEnv(config, 'DB');
 console.log(config.host);
 
 // v2.0 - Returns the object
-const config = AutoEnvParse.parse({ host: 'localhost' }, 'DB');
+const config = AutoEnvParse.parse({ host: 'localhost' }, { prefix: 'DB' });
 console.log(config.host);
 ```
 
@@ -935,7 +957,7 @@ const overrides = new Map([
 ]);
 
 // Parse configuration
-const config = AutoEnvParse.parse(ApplicationConfig, 'APP', overrides);
+const config = AutoEnvParse.parse(ApplicationConfig, { prefix: 'APP', overrides });
 
 // Use configuration
 console.log('Server URL:', config.getServerUrl());

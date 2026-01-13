@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-01-14
+
+### BREAKING CHANGES
+
+**Remove deprecated v2.0 backward compatibility API (#32):**
+
+The old v2.0 signature that accepted `prefix` as a string and `overrides` as separate parameters has been removed. Only the options-based API introduced in v2.1 is now supported.
+
+```typescript
+// ❌ v2.x - REMOVED
+AutoEnvParse.parse(config, 'DB');
+AutoEnvParse.parse(config, 'DB', overrides);
+
+// ✅ v3.0 - Use this
+AutoEnvParse.parse(config, { prefix: 'DB' });
+AutoEnvParse.parse(config, { prefix: 'DB', overrides });
+```
+
+**Migration Guide:**
+
+Simple prefix usage:
+```typescript
+// Before (v2.x)
+const config = AutoEnvParse.parse(myConfig, 'DB');
+
+// After (v3.0)
+const config = AutoEnvParse.parse(myConfig, { prefix: 'DB' });
+```
+
+With overrides:
+```typescript
+// Before (v2.x)
+const config = AutoEnvParse.parse(myConfig, 'DB', overrides);
+
+// After (v3.0)
+const config = AutoEnvParse.parse(myConfig, { prefix: 'DB', overrides });
+```
+
+No prefix (default):
+```typescript
+// Before (v2.x)
+const config = AutoEnvParse.parse(myConfig);
+
+// After (v3.0) - no change needed!
+const config = AutoEnvParse.parse(myConfig);
+```
+
+**Automated Migration:**
+
+Use find/replace with regex:
+- Find: `\.parse\(([^,]+),\s*'([^']+)'\)`
+- Replace: `.parse($1, { prefix: '$2' })`
+
+### Removed
+- **v2.0 API signature** - `parse(target, prefix, overrides)` removed in favor of `parse(target, options)`
+- **Conditional logic** - Simplified implementation by removing string vs options detection
+
+### Changed
+- **API Documentation** - Updated all examples to use options-based API
+- **README** - Added v3.0 migration guide
+
+### Benefits
+- ✅ **Cleaner API** - Single consistent interface
+- ✅ **Better extensibility** - Easy to add new options without changing signature
+- ✅ **Less confusion** - One clear way to call the function
+- ✅ **Reduced bundle size** - Simpler implementation (~40 lines removed)
+- ✅ **Future-proof** - New features can be added via options object
+
+## [2.1.1] - 2026-01-13
+
+### Changed
+- **Workflow improvements** - Switched to tag-based npm publishing workflow with provenance support
+- **prepublishOnly hook** - Enhanced to run lint, typecheck, test, and build
+
+### Fixed
+- **Dependency updates** - Updated TypeScript ESLint tooling, Node types, ESLint, and globals
+
 ## [2.1.0] - 2025-12-13
 
 ### Added
@@ -295,6 +372,8 @@ const config = AutoEnvParse.parse({ host: 'localhost' }, 'DB');
 - `toSnakeCase()` - Convert camelCase to snake_case
 - `coerceValue()` - Type coercion utility
 
+[3.0.0]: https://github.com/vlavrynovych/auto-envparse/compare/v2.1.1...v3.0.0
+[2.1.1]: https://github.com/vlavrynovych/auto-envparse/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/vlavrynovych/auto-envparse/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/vlavrynovych/auto-envparse/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/vlavrynovych/auto-envparse/compare/v1.1.0...v1.1.1

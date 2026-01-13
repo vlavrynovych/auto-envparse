@@ -46,7 +46,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.TEST_SSL = 'true';
             process.env.TEST_POOL_SIZE = '20';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.host).toBe('db.example.com');
             expect(config.port).toBe(3306);
@@ -63,7 +63,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.DB_DATABASE = 'production';
             process.env.DB_TIMEOUT = '10000';
 
-            AutoEnvParse.parse(dbConfig, 'DB');
+            AutoEnvParse.parse(dbConfig, { prefix: 'DB' });
 
             expect(dbConfig.database).toBe('production');
             expect(dbConfig.timeout).toBe(10000);
@@ -74,17 +74,17 @@ describe('AutoEnvParse - Object Parsing', () => {
 
             // Lowercase prefix should throw
             expect(() => {
-                AutoEnvParse.parse(config, 'db');
+                AutoEnvParse.parse(config, { prefix: 'db' });
             }).toThrow(/Invalid prefix "db"/);
 
             // Prefix with special characters should throw
             expect(() => {
-                AutoEnvParse.parse(config, 'DB_');
+                AutoEnvParse.parse(config, { prefix: 'DB_' });
             }).toThrow(/Invalid prefix "DB_"/);
 
             // Mixed case should throw
             expect(() => {
-                AutoEnvParse.parse(config, 'Db');
+                AutoEnvParse.parse(config, { prefix: 'Db' });
             }).toThrow(/Invalid prefix "Db"/);
         });
 
@@ -99,7 +99,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.TEST_CONNECTION_HOST = 'remote.example.com';
             process.env.TEST_CONNECTION_PORT = '3307';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.connection.host).toBe('remote.example.com');
             expect(config.connection.port).toBe(3307);
@@ -124,7 +124,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.TEST_DATABASE_CONNECTION_POOL_MIN = '5';
             process.env.TEST_DATABASE_CONNECTION_POOL_MAX = '20';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.database.connection.host).toBe('deep.example.com');
             expect(config.database.connection.port).toBe(3308);
@@ -143,7 +143,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.TEST_MAX_POOL_SIZE = '50';
             process.env.TEST_ENABLE_SSL = 'true';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.databaseUrl).toBe('prod.db');
             expect(config.maxPoolSize).toBe(50);
@@ -161,7 +161,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.TEST_API_KEY = 'secret123';
             process.env.TEST_XML_PARSER = 'false';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.HTTPSPort).toBe(8443);
             expect(config.APIKey).toBe('secret123');
@@ -188,7 +188,7 @@ describe('AutoEnvParse - Object Parsing', () => {
 
             process.env.TEST_PORT = '99999';
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.port).toBe(3000); // Should keep default
         });
@@ -202,7 +202,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.TEST_TAGS = '["tag1", "tag2", "tag3"]';
             process.env.TEST_PORTS = '[8080, 8081]';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.tags).toEqual(['tag1', 'tag2', 'tag3']);
             expect(config.ports).toEqual([8080, 8081]);
@@ -215,7 +215,7 @@ describe('AutoEnvParse - Object Parsing', () => {
 
             process.env.TEST_TAGS = 'not-json';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.tags).toEqual(['default']); // Keep default
         });
@@ -230,7 +230,7 @@ describe('AutoEnvParse - Object Parsing', () => {
 
             process.env.TEST_NESTED = '{"key1": "updated", "key2": 20}';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.nested.key1).toBe('updated');
             expect(config.nested.key2).toBe(20);
@@ -245,7 +245,7 @@ describe('AutoEnvParse - Object Parsing', () => {
 
             process.env.TEST_NESTED = 'not-json';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.nested.key).toBe('value'); // Keep default
         });
@@ -262,7 +262,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.TEST_NESTED = '{"key1": "from-json", "key2": 20}';
             process.env.TEST_NESTED_KEY1 = 'from-dot-notation';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // Dot-notation should win
             expect(config.nested.key1).toBe('from-dot-notation');
@@ -280,7 +280,7 @@ describe('AutoEnvParse - Object Parsing', () => {
 
             process.env.TEST_COMPLEX_VALUE = 'updated';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.complex.value).toBe('updated');
         });
@@ -296,7 +296,7 @@ describe('AutoEnvParse - Object Parsing', () => {
 
             process.env.TEST_COMPLEX = 'not-json';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.complex.value).toBe('default');
         });
@@ -308,7 +308,7 @@ describe('AutoEnvParse - Object Parsing', () => {
 
             process.env.TEST_PATTERNS = '["^foo", "bar$"]';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.patterns).toHaveLength(2);
             expect(config.patterns[0]).toBeInstanceOf(RegExp);
@@ -324,7 +324,7 @@ describe('AutoEnvParse - Object Parsing', () => {
 
             process.env.TEST_ITEMS = '["x", "y"]';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.items).toEqual(['x', 'y']);
             expect(config.items[0]).not.toBeInstanceOf(RegExp);
@@ -342,7 +342,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.TEST_NULL_VALUE = 'not-null';
             process.env.TEST_UNDEFINED_VALUE = 'defined';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.nullValue).toBe('not-null');
             expect(config.undefinedValue).toBe('defined');
@@ -362,7 +362,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.TEST_OWN = 'updated-child';
             process.env.TEST_INHERITED = 'updated-base';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.own).toBe('updated-child');
             // In JavaScript, class properties become own properties on the instance
@@ -399,7 +399,7 @@ describe('AutoEnvParse - Object Parsing', () => {
             process.env.DEBUG = 'true';
             process.env.TIMEOUT = '10000';
 
-            AutoEnvParse.parse(config, '');
+            AutoEnvParse.parse(config, { prefix: '' });
 
             expect(config.debug).toBe(true);
             expect(config.timeout).toBe(10000);

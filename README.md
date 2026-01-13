@@ -10,6 +10,23 @@
 
 ---
 
+## 📋 Table of Contents
+
+- [💡 Why auto-envparse?](#-why-auto-envparse)
+- [🎯 Features](#-features)
+- [📦 Installation](#-installation)
+- [🚀 Quick Start](#-quick-start)
+- [📖 Type Coercion & Advanced Types](#-type-coercion--advanced-types)
+- [📁 .env File Loading](#-env-file-loading)
+- [🛠️ Custom Validation & Transforms](#️-custom-validation--transforms)
+- [📚 Documentation](#-documentation)
+- [🎨 TypeScript Support](#-typescript-support)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+- [🔗 Links](#-links)
+
+---
+
 ## 💡 Why auto-envparse?
 
 Most environment variable libraries force you to write schemas and validators before you can parse anything:
@@ -28,7 +45,7 @@ const config = cleanEnv(process.env, schema);
 
 ```typescript
 // ✅ auto-envparse: Your object IS the schema
-import { AutoEnvParse } from 'auto-envparse';
+import AEP from 'auto-envparse';
 
 const config = {
     host: 'localhost',
@@ -36,7 +53,7 @@ const config = {
     ssl: false
 };
 
-AutoEnvParse.parse(config, 'DB'); // Done!
+AEP.parse(config, { prefix: 'DB' }); // Done!
 ```
 
 **The type of each default value tells auto-envparse how to parse it.** No schemas. No validators. No manual type conversion. Just works.
@@ -44,7 +61,7 @@ AutoEnvParse.parse(config, 'DB'); // Done!
 ### Works with Classes Too
 
 ```typescript
-import { AutoEnvParse } from 'auto-envparse';
+import AEP from 'auto-envparse';
 
 class DatabaseConfig {
     host = 'localhost';
@@ -53,7 +70,7 @@ class DatabaseConfig {
 }
 
 // Environment: DB_HOST=example.com, DB_PORT=3306, DB_SSL=true
-const config = AutoEnvParse.parse(DatabaseConfig, 'DB');
+const config = AEP.parse(DatabaseConfig, { prefix: 'DB' });
 // Returns a fully populated DatabaseConfig instance
 ```
 
@@ -96,7 +113,7 @@ yarn add auto-envparse
 ### 1. Basic Usage
 
 ```typescript
-import { AutoEnvParse } from 'auto-envparse';
+import AEP from 'auto-envparse';
 
 const config = {
     apiUrl: 'http://localhost:3000',
@@ -105,7 +122,7 @@ const config = {
 };
 
 // Environment variables: APP_API_URL, APP_TIMEOUT, APP_DEBUG
-AutoEnvParse.parse(config, 'APP');
+AEP.parse(config, { prefix: 'APP' });
 
 console.log(config.timeout); // Automatically converted to number
 ```
@@ -114,7 +131,7 @@ console.log(config.timeout); // Automatically converted to number
 
 ```typescript
 import AEP from 'auto-envparse';
-AEP.parse(config, 'APP');
+AEP.parse(config, { prefix: 'APP' });
 ```
 
 ### 2. Without Prefix
@@ -122,7 +139,7 @@ AEP.parse(config, 'APP');
 Prefix is optional - omit it for global environment variables:
 
 ```typescript
-import { AutoEnvParse } from 'auto-envparse';
+import AEP from 'auto-envparse';
 
 const config = {
     host: 'localhost',
@@ -131,13 +148,13 @@ const config = {
 };
 
 // Environment variables: HOST, PORT, NODE_ENV
-AutoEnvParse.parse(config);
+AEP.parse(config);
 ```
 
 ### 3. Nested Objects
 
 ```typescript
-import { AutoEnvParse } from 'auto-envparse';
+import AEP from 'auto-envparse';
 
 const config = {
     database: {
@@ -155,13 +172,13 @@ const config = {
 // APP_DATABASE_PORT=5433
 // APP_DATABASE_POOL_MIN=5
 // APP_DATABASE_POOL_MAX=20
-AutoEnvParse.parse(config, 'APP');
+AEP.parse(config, { prefix: 'APP' });
 ```
 
 ### 4. Class-Based Configuration
 
 ```typescript
-import { AutoEnvParse } from 'auto-envparse';
+import AEP from 'auto-envparse';
 
 class ServerConfig {
     host = '0.0.0.0';
@@ -173,18 +190,34 @@ class ServerConfig {
 }
 
 // Environment: SERVER_HOST=example.com, SERVER_PORT=8080
-const config = AutoEnvParse.parse(ServerConfig, 'SERVER');
+const config = AEP.parse(ServerConfig, { prefix: 'SERVER' });
 console.log(config.getUrl()); // 'http://example.com:8080'
 ```
 
 ---
 
-## 📖 Type Coercion
+## 📖 Type Coercion & Advanced Types
 
 auto-envparse automatically converts environment variables based on your default value types:
 
-| Default Value | Env Var | Result | Type |
-|---------------|---------|--------|------|
+| Type | Example | Result |
+|------|---------|--------|
+| `string` | `DB_HOST=prod.com` | `'prod.com'` |
+| `number` | `DB_PORT=3306` | `3306` |
+| `boolean` | `DB_SSL=true` | `true` (supports: true/false, 1/0, yes/no, on/off) |
+| `object` | `DB_POOL_MIN=5` | Nested via dot-notation or JSON |
+| `array` | `SERVERS_0_HOST=x.com` | Arrays via dot-notation or JSON |
+
+**Arrays of Objects:**
+```typescript
+const config = { servers: [{ host: 'localhost', port: 8080 }] };
+// SERVERS_0_HOST=s1.com, SERVERS_0_PORT=8080, SERVERS_1_HOST=s2.com, SERVERS_1_PORT=8081
+AEP.parse(config, { prefix: 'APP' });
+```
+
+See [API.md](API.md) for complete type coercion details and edge cases.
+
+---------------|---------|--------|------|
 | `'localhost'` | `'prod.com'` | `'prod.com'` | `string` |
 | `5432` | `'3306'` | `3306` | `number` |
 | `false` | `'true'` | `true` | `boolean` |
@@ -216,7 +249,7 @@ const config = {
 // APP_SERVERS_1_HOST=server2.com
 // APP_SERVERS_1_PORT=8081
 
-AutoEnvParse.parse(config, 'APP');
+AEP.parse(config, { prefix: 'APP' });
 // Result: servers = [
 //   { host: 'server1.com', port: 8080 },
 //   { host: 'server2.com', port: 8081 }
@@ -226,7 +259,7 @@ AutoEnvParse.parse(config, 'APP');
 **JSON Format** (Also supported):
 ```typescript
 // APP_SERVERS='[{"host":"server1.com","port":8080}]'
-AutoEnvParse.parse(config, 'APP');
+AEP.parse(config, { prefix: 'APP' });
 ```
 
 **Features**:
@@ -239,240 +272,79 @@ AutoEnvParse.parse(config, 'APP');
 
 ## 📁 .env File Loading
 
-Load environment variables from `.env` files with configurable multi-source support:
-
-### Basic Usage
+Load from `.env` files with configurable priority:
 
 ```typescript
-import { AutoEnvParse } from 'auto-envparse';
+import AEP from 'auto-envparse';
 
 const config = { host: 'localhost', port: 3000 };
 
-// Load from .env file
-AutoEnvParse.parse(config, {
+// Default: loads from ['env', '.env']
+AEP.parse(config, { prefix: 'APP' });
+
+// Multi-source with priority (first wins):
+AEP.parse(config, {
     prefix: 'APP',
-    sources: ['.env']
-});
-```
-
-### Multi-Source Loading
-
-Load from multiple sources with priority control (first source wins):
-
-```typescript
-// Priority: .env.local > .env > environment variables
-AutoEnvParse.parse(config, {
-    prefix: 'APP',
-    sources: ['.env.local', '.env', 'env']
+    sources: ['env', '.env.local', '.env']  // process.env > .env.local > .env
 });
 
-// Priority: environment variables > .env
-AutoEnvParse.parse(config, {
-    prefix: 'APP',
-    sources: ['env', '.env']  // Default behavior
-});
-```
-
-### Default Behavior
-
-By default, auto-envparse loads from `['env', '.env']`:
-
-```typescript
-// These are equivalent:
-AutoEnvParse.parse(config, { prefix: 'APP' });
-AutoEnvParse.parse(config, { prefix: 'APP', sources: ['env', '.env'] });
-
-// Backward compatible with v2.0:
-AutoEnvParse.parse(config, 'APP');  // Also defaults to ['env', '.env']
-```
-
-### Custom Parser (Bring Your Own)
-
-Use your preferred parser like `dotenv`:
-
-```typescript
+// Custom parser (e.g., dotenv):
 import { parse } from 'dotenv';
-
-AutoEnvParse.parse(config, {
+AEP.parse(config, {
     prefix: 'APP',
     sources: ['.env'],
-    envFileParser: parse  // Use dotenv.parse
+    envFileParser: parse
 });
 ```
 
-### Built-in Parser
-
-When no `envFileParser` is provided, auto-envparse uses a lightweight built-in parser that supports:
-
-- `KEY=value` format
-- Comments starting with `#`
-- Quoted values (`"..."` or `'...'`)
-- Empty lines
-
-**Example .env file:**
-```bash
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME="my_database"
-DB_SSL=true
-```
-
-### Missing Files
-
-Missing files generate a warning but don't stop execution:
-
-```typescript
-// If .env.local doesn't exist, warning is logged and parsing continues
-AutoEnvParse.parse(config, {
-    prefix: 'APP',
-    sources: ['.env.local', '.env', 'env']
-});
-// Console: Warning: Environment file not found: .env.local
-```
+The built-in parser supports `KEY=value`, comments, and quotes. For advanced features (multiline, variable expansion), use `dotenv.parse`. See [API.md](API.md) for details.
 
 ---
 
-## 🛠️ Custom Validation
 
-Add validation when needed using overrides:
+## 🛠️ Custom Validation & Transforms
 
-```typescript
-import { AutoEnvParse } from 'auto-envparse';
-
-const config = { port: 3000 };
-const overrides = new Map();
-
-overrides.set('port', (obj, envVar) => {
-    const value = process.env[envVar];
-    if (value) {
-        const port = parseInt(value, 10);
-        if (port >= 1 && port <= 65535) {
-            obj.port = port;
-        } else {
-            throw new Error(`Port must be 1-65535, got: ${port}`);
-        }
-    }
-});
-
-AutoEnvParse.parse(config, 'APP', overrides);
-```
-
-### Enum Validation
-
-For enum-like values, use the built-in `enumValidator` helper:
+Add custom validation using overrides:
 
 ```typescript
-import { AutoEnvParse } from 'auto-envparse';
+import AEP from 'auto-envparse';
 
-const config = {
-    env: 'dev',
-    log: 'info',
-    region: 'us-east-1',
-    protocol: 'https'
-};
-
-// Compact initialization for multiple enum fields
-const overrides = new Map([
-    ['env', AutoEnvParse.enumValidator('env', ['dev', 'staging', 'prod'])],
-    ['log', AutoEnvParse.enumValidator('log', ['debug', 'info', 'warn', 'error'])],
-    ['region', AutoEnvParse.enumValidator('region', ['us-east-1', 'us-west-2', 'eu-west-1'])],
-    ['protocol', AutoEnvParse.enumValidator('protocol', ['http', 'https'])],
-]);
-
-AutoEnvParse.parse(config, 'APP', overrides);
-
-// ✅ Valid: APP_ENV=prod, APP_LOG=info, APP_REGION=us-west-2, APP_PROTOCOL=https
-// ❌ Invalid: APP_ENV=test (throws error - not in allowed list)
-// ❌ Invalid: APP_REGION=ap-south-1 (throws error - not in allowed list)
-```
-
-### Transform Functions
-
-Apply custom transformations to environment variable values before they're assigned. Perfect for data validation, formatting, or complex type conversions:
-
-```typescript
-import { AutoEnvParse } from 'auto-envparse';
-
-const config = {
-    timeout: 30000,
-    tags: [] as string[],
-    retries: 3
-};
+const config = { port: 3000, env: 'dev' as 'dev' | 'staging' | 'prod' };
 
 const overrides = new Map([
-    // Ensure minimum timeout value
-    ['timeout', AutoEnvParse.transform('timeout', (val) =>
-        Math.max(parseInt(val), 1000)
-    )],
+    // Custom validation
+    ['port', (obj, envVar) => {
+        const port = parseInt(process.env[envVar] || '');
+        if (port >= 1 && port <= 65535) obj.port = port;
+        else throw new Error(`Invalid port: ${port}`);
+    }],
 
-    // Split comma-separated values
-    ['tags', AutoEnvParse.transform('tags', (val) =>
-        val.split(',').map(t => t.trim())
-    )],
+    // Enum validation (built-in helper)
+    ['env', AEP.enumValidator('env', ['dev', 'staging', 'prod'])],
 
-    // Clamp retries between 1 and 10
-    ['retries', AutoEnvParse.transform('retries', (val) => {
-        const num = parseInt(val);
-        return Math.max(1, Math.min(num, 10));
-    })]
+    // Transform values (built-in helper)
+    ['timeout', AEP.transform('timeout', (val) => Math.max(parseInt(val), 1000))]
 ]);
 
-AutoEnvParse.parse(config, 'APP', overrides);
+AEP.parse(config, { prefix: 'APP', overrides });
 ```
 
-**Use with external libraries** for complex transformations:
+**Helpers available:**
+- `AEP.enumValidator(key, allowedValues)` - Validate enum values
+- `AEP.transform(key, fn)` - Transform values with custom logic
 
-```typescript
-import _ from 'lodash';
-import moment from 'moment';
-
-const overrides = new Map([
-    // Clamp with lodash
-    ['poolSize', AutoEnvParse.transform('poolSize', (val) =>
-        _.clamp(parseInt(val), 1, 100)
-    )],
-
-    // Parse dates with moment
-    ['startDate', AutoEnvParse.transform('startDate', (val) =>
-        moment(val).toDate()
-    )]
-]);
-```
+See [API.md](API.md) for complete override examples and helper documentation.
 
 ---
 
 ## 📚 Documentation
 
-### Getting Started
-- [Quick Start](#-quick-start) - Get up and running in 30 seconds
-- [Type Coercion](#-type-coercion) - How types are automatically converted
-- [Installation](#-installation) - npm and yarn instructions
-
-### Configuration
-- [Custom Validation](#-custom-validation) - Add validation rules
-- [Nested Objects](#3-nested-objects) - Working with deep structures
-- [Class-Based Config](#4-class-based-configuration) - Using with classes
-
-### Reference
-- [API Documentation](./API.md) - Complete API reference
-- [CHANGELOG](./CHANGELOG.md) - Version history
+- **[API.md](./API.md)** - Complete API reference with all methods and options
+- **[CHANGELOG.md](./CHANGELOG.md)** - Version history and migration guides
 
 ---
 
-## 📊 Comparison with Other Libraries
-
-| Feature | auto-envparse | envalid | convict | dotenv |
-|---------|--------------|---------|---------|--------|
-| Zero config | ✅ | ❌ | ❌ | ✅ |
-| Type inference | ✅ | ❌ | ❌ | ❌ |
-| Auto coercion | ✅ | ✅ | ✅ | ❌ |
-| Nested objects | ✅ | ❌ | ✅ | ❌ |
-| Custom validation | ✅ | ✅ | ✅ | ❌ |
-| TypeScript | ✅ | ✅ | ✅ | ✅ |
-| Dependencies | 0 | 1 | 2 | 0 |
-
-**auto-envparse** is the only library that uses reflection and type inference to eliminate schema definitions entirely.
+---
 
 ---
 
@@ -481,7 +353,7 @@ const overrides = new Map([
 Full type safety with TypeScript:
 
 ```typescript
-import { AutoEnvParse } from 'auto-envparse';
+import AEP from 'auto-envparse';
 
 interface Config {
     host: string;
@@ -495,7 +367,7 @@ const config: Config = {
     ssl: false
 };
 
-AutoEnvParse.parse(config, 'DB');
+AEP.parse(config, { prefix: 'DB' });
 
 // All types are preserved and enforced
 const host: string = config.host;
@@ -508,38 +380,24 @@ const ssl: boolean = config.ssl;
 auto-envparse supports both CommonJS and ESM:
 
 ```typescript
+// ESM (import) - Default export (recommended)
+import AEP from 'auto-envparse';
+AEP.parse(config, { prefix: 'DB' });
+
 // ESM (import) - Named export
 import { AutoEnvParse } from 'auto-envparse';
-AutoEnvParse.parse(config, 'DB');
-
-// ESM (import) - Default export
-import AEP from 'auto-envparse';
-AEP.parse(config, 'DB');
-
-// CommonJS (require) - Named export
-const { AutoEnvParse } = require('auto-envparse');
-AutoEnvParse.parse(config, 'DB');
+AutoEnvParse.parse(config, { prefix: 'DB' });
 
 // CommonJS (require) - Default export
 const AEP = require('auto-envparse').default;
-AEP.parse(config, 'DB');
+AEP.parse(config, { prefix: 'DB' });
+
+// CommonJS (require) - Named export
+const { AutoEnvParse } = require('auto-envparse');
+AutoEnvParse.parse(config, { prefix: 'DB' });
 ```
 
 Works seamlessly in both module systems!
-
----
-
-## 🔧 How It Works
-
-auto-envparse uses JavaScript reflection to eliminate configuration:
-
-1. **Discover** - Iterate through object's own properties
-2. **Infer** - Determine types from default values
-3. **Transform** - Convert camelCase to PREFIX_SNAKE_CASE
-4. **Parse** - Read env vars and coerce to correct types
-5. **Apply** - Update properties in-place
-
-No magic. No complex schemas. Just smart reflection.
 
 ---
 

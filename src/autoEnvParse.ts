@@ -74,12 +74,12 @@ export interface ParseOptions<T = unknown> {
  *
  * @example
  * ```typescript
- * // Simple usage
+ * // Simple usage with prefix
  * const config = { host: 'localhost', port: 5432, ssl: false };
- * AutoEnvParse.parse(config, 'DB');
+ * AutoEnvParse.parse(config, { prefix: 'DB' });
  * // Applies: DB_HOST, DB_PORT, DB_SSL
  *
- * // With .env files (v2.1+)
+ * // With .env files
  * AutoEnvParse.parse(config, {
  *   prefix: 'DB',
  *   sources: ['env', '.env.local', '.env']
@@ -96,12 +96,12 @@ export interface ParseOptions<T = unknown> {
  *         }
  *     }
  * });
- * AutoEnvParse.parse(config, 'DB', overrides);
+ * AutoEnvParse.parse(config, { prefix: 'DB', overrides });
  * ```
  */
 export class AutoEnvParse {
     /**
-     * Parse environment variables and create an instance from a class constructor (v2.1+ options API).
+     * Parse environment variables and create an instance from a class constructor.
      *
      * @param classConstructor - Class constructor function with default values
      * @param options - Parse options including prefix, overrides, sources, and envFileParser
@@ -122,7 +122,7 @@ export class AutoEnvParse {
     ): InstanceType<T>;
 
     /**
-     * Parse environment variables and apply them to a plain object (v2.1+ options API).
+     * Parse environment variables and apply them to a plain object.
      *
      * @param target - Object to populate from environment variables
      * @param options - Parse options including prefix, overrides, sources, and envFileParser
@@ -142,97 +142,40 @@ export class AutoEnvParse {
     ): T;
 
     /**
-     * Parse environment variables and create an instance from a class constructor (v2.0 backward compatibility).
-     *
-     * @param classConstructor - Class constructor function with default values
-     * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
-     * @param overrides - Optional custom parsers for specific properties
-     * @returns New instance of the class populated from environment variables
-     *
-     * @example
-     * ```typescript
-     * class DbConfig { host = 'localhost'; port = 5432; }
-     * const config = AutoEnvParse.parse(DbConfig, 'DB');
-     * console.log(config.host); // Populated from DB_HOST env var
-     * ```
-     */
-    static parse<T extends { new(): object }>(
-        classConstructor: T,
-        prefix?: string,
-        overrides?: Map<string, (target: InstanceType<T>, envVarName: string) => void>
-    ): InstanceType<T>;
-
-    /**
-     * Parse environment variables and apply them to a plain object (v2.0 backward compatibility).
-     *
-     * @param target - Object to populate from environment variables
-     * @param prefix - Optional environment variable prefix (e.g., 'DB', 'APP', 'REDIS'). Defaults to empty string.
-     * @param overrides - Optional custom parsers for specific properties
-     * @returns The populated object
-     *
-     * @example
-     * ```typescript
-     * const config = AutoEnvParse.parse({ host: 'localhost', port: 5432 }, 'DB');
-     * console.log(config.host); // Populated from DB_HOST env var
-     * ```
-     */
-    static parse<T extends object>(
-        target: T,
-        prefix?: string,
-        overrides?: Map<string, (target: T, envVarName: string) => void>
-    ): T;
-
-    /**
      * Unified parse implementation that handles both objects and class constructors.
-     * Supports both v2.0 (prefix, overrides) and v2.1+ (options) signatures.
      *
      * @param targetOrClass - Either a plain object or a class constructor
-     * @param prefixOrOptions - Either prefix string (v2.0) or options object (v2.1+)
-     * @param overrides - Optional custom parsers (v2.0 only)
+     * @param options - Parse options including prefix, overrides, sources, and envFileParser
      * @returns The populated object or class instance
      */
     static parse(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         targetOrClass: any,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        prefixOrOptions?: string | ParseOptions<any>,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        overrides?: Map<string, any>
+        options?: ParseOptions<any>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): any {
-        // Detect signature: v2.0 (string prefix) or v2.1+ (options object)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let options: ParseOptions<any>;
+        // Use provided options or default to empty object
+        const opts = options || {};
 
-        if (typeof prefixOrOptions === 'string') {
-            // v2.0 signature: parse(target, prefix, overrides)
-            options = {
-                prefix: prefixOrOptions,
-                overrides,
-                sources: ['env', '.env']
-            };
-        } else {
-            // v2.1+ signature: parse(target, options)
-            options = prefixOrOptions || {};
-            // Default sources if not specified
-            if (!options.sources) {
-                options.sources = ['env', '.env'];
-            }
+        // Default sources if not specified
+        if (!opts.sources) {
+            opts.sources = ['env', '.env'];
         }
 
         // Load and merge environment variables from all sources
         // sources is guaranteed to be defined by the logic above
-        const mergedEnv = this.loadSources(options.sources!, options.envFileParser);
+        const mergedEnv = this.loadSources(opts.sources!, opts.envFileParser);
 
         // Runtime detection: is it a constructor function or a plain object?
         if (typeof targetOrClass === 'function') {
             // Class constructor path - create instance and parse it
             const instance = new targetOrClass();
-            this.parseObject(instance, options.prefix || '', options.overrides, mergedEnv);
+            this.parseObject(instance, opts.prefix || '', opts.overrides, mergedEnv);
             return instance;
         } else {
             // Plain object path - parse and return it
-            this.parseObject(targetOrClass, options.prefix || '', options.overrides, mergedEnv);
+            this.parseObject(targetOrClass, opts.prefix || '', opts.overrides, mergedEnv);
             return targetOrClass;
         }
     }

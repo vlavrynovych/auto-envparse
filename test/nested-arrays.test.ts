@@ -46,7 +46,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_SERVERS_1_HOST = 'server2.com';
             process.env.TEST_SERVERS_1_PORT = '8081';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.servers).toHaveLength(2);
             expect(config.servers[0].host).toBe('server1.com');
@@ -68,7 +68,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_DATABASES_0_HOST = 'prod.db.com';
             process.env.TEST_DATABASES_0_PORT = '5433';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.databases).toHaveLength(1);
             expect(config.databases[0].name).toBe('production');
@@ -92,7 +92,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_ENDPOINTS_1_TIMEOUT = '6000';
             process.env.TEST_ENDPOINTS_1_ENABLED = 'true';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.endpoints).toHaveLength(2);
             expect(config.endpoints[0].timeout).toBe(3000);
@@ -119,7 +119,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_ITEMS_5_ID = '30';
             process.env.TEST_ITEMS_5_NAME = 'third';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // Should be compact (no undefined elements)
             expect(config.items).toHaveLength(3);
@@ -144,7 +144,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_SORTED_2_VALUE = '20';
             process.env.TEST_SORTED_0_VALUE = '0';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.sorted).toHaveLength(4);
             expect(config.sorted[0].value).toBe(0);
@@ -173,7 +173,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_SERVICES_1_CONFIG_HOST = 'api1.com';
             process.env.TEST_SERVICES_1_CONFIG_PORT = '8081';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.services).toHaveLength(2);
             expect(config.services[0].name).toBe('web');
@@ -201,7 +201,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_CLUSTERS_0_SETTINGS_DATABASE_HOST = 'db1.com';
             process.env.TEST_CLUSTERS_0_SETTINGS_DATABASE_PORT = '5433';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.clusters).toHaveLength(1);
             expect(config.clusters[0].name).toBe('cluster1');
@@ -218,7 +218,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
 
             process.env.TEST_EMPTY_0_VALUE = 'should-not-parse';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // Should remain empty (no template to infer from)
             expect(config.empty).toHaveLength(0);
@@ -237,7 +237,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_DATA = '[{"value":"from-json"}]';
             process.env.TEST_DATA_0_VALUE = 'from-dot-notation';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // Dot-notation should win
             expect(config.data).toHaveLength(1);
@@ -256,7 +256,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
 
             process.env.TEST_ITEMS = '[{"id":10,"name":"json1"},{"id":20,"name":"json2"}]';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.items).toHaveLength(2);
             expect(config.items[0].id).toBe(10);
@@ -276,7 +276,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
 
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(consoleWarnSpy).toHaveBeenCalledWith(
                 expect.stringContaining('Warning: Invalid TEST_ITEMS format')
@@ -296,7 +296,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
 
             process.env.TEST_PATTERNS = '["^foo", "bar$"]';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.patterns).toHaveLength(2);
             expect(config.patterns[0]).toBeInstanceOf(RegExp);
@@ -314,7 +314,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_PATTERNS_0_SOURCE = '^should-not-parse';
             process.env.TEST_PATTERNS = '["^works"]';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.patterns).toHaveLength(1);
             expect(config.patterns[0].source).toBe('^works');
@@ -334,7 +334,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_SERVERS_1_HOST = 'server2.com';
             process.env.TEST_SERVERS_1_PORT = '9000';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // Should create array with just index 1
             expect(config.servers).toHaveLength(1);
@@ -355,7 +355,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_ITEMS_0_NAME = 'updated-name';
             process.env.TEST_ITEMS_0_COUNT = '42';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.items[0].name).toBe('updated-name');
             expect(config.items[0].value).toBe('default-value'); // Keeps default
@@ -380,7 +380,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_MIXED_1_NUM = '456';
             process.env.TEST_MIXED_1_BOOL = 'false';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.mixed).toHaveLength(2);
             expect(config.mixed[0].str).toBe('hello');
@@ -406,7 +406,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_API_ENDPOINTS_0_MAX_RETRIES = '5';
             process.env.TEST_API_ENDPOINTS_0_TIMEOUT_MS = '10000';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.apiEndpoints).toHaveLength(1);
             expect(config.apiEndpoints[0].baseUrl).toBe('https://api.com');
@@ -449,7 +449,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_NUMBERS_0_VALUE = '10';
             process.env.TEST_NUMBERS_1_VALUE = '20';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             // Array should be created based on indices, but values remain as template
             expect(config.numbers).toHaveLength(2);
@@ -469,7 +469,7 @@ describe('AutoEnvParse - Nested Array Support', () => {
             process.env.TEST_ITEMS_0_OWN = 'updated-own';
             process.env.TEST_ITEMS_0_INHERITED = 'should-not-update';
 
-            AutoEnvParse.parse(config, 'TEST');
+            AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(config.items).toHaveLength(1);
             expect(config.items[0].own).toBe('updated-own');

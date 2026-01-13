@@ -44,7 +44,7 @@ describe('AutoEnvParse - Class Parsing', () => {
             process.env.TEST_PORT = '5433';
             process.env.TEST_SSL = 'true';
 
-            const config = AutoEnvParse.parse(DatabaseConfig, 'TEST');
+            const config = AutoEnvParse.parse(DatabaseConfig, { prefix: 'TEST' });
 
             expect(config).toBeInstanceOf(DatabaseConfig);
             expect(config.host).toBe('prod.example.com');
@@ -65,7 +65,7 @@ describe('AutoEnvParse - Class Parsing', () => {
             process.env.TEST_HOST = 'example.com';
             process.env.TEST_PORT = '8080';
 
-            const config = AutoEnvParse.parse(ServerConfig, 'TEST');
+            const config = AutoEnvParse.parse(ServerConfig, { prefix: 'TEST' });
 
             expect(config).toBeInstanceOf(ServerConfig);
             expect(config.getUrl()).toBe('http://example.com:8080');
@@ -102,7 +102,7 @@ describe('AutoEnvParse - Class Parsing', () => {
             process.env.TEST_DATABASE_HOST = 'prod.example.com';
             process.env.TEST_DATABASE_PORT = '5433';
 
-            const config = AutoEnvParse.parse(ComplexConfig, 'TEST');
+            const config = AutoEnvParse.parse(ComplexConfig, { prefix: 'TEST' });
 
             expect(config).toBeInstanceOf(ComplexConfig);
             expect(config.database.host).toBe('prod.example.com');
@@ -127,7 +127,7 @@ describe('AutoEnvParse - Class Parsing', () => {
 
             process.env.TEST_PORT = '8080';
 
-            const config = AutoEnvParse.parse(AppConfig, 'TEST', overrides);
+            const config = AutoEnvParse.parse(AppConfig, { prefix: 'TEST', overrides: overrides });
 
             expect(config).toBeInstanceOf(AppConfig);
             expect(config.port).toBe(8080);
@@ -297,7 +297,7 @@ describe('AutoEnvParse - Class Parsing', () => {
 
             // Should not throw because it won't try to apply nested parsing to Date
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST');
+                AutoEnvParse.parse(config, { prefix: 'TEST' });
             }).not.toThrow();
         });
 
@@ -315,7 +315,7 @@ describe('AutoEnvParse - Class Parsing', () => {
 
             // Should work fine with class instances
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST');
+                AutoEnvParse.parse(config, { prefix: 'TEST' });
             }).not.toThrow();
 
             expect(config.complex.prop).toBe('updated');

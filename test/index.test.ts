@@ -49,7 +49,7 @@ describe('Index Exports - v2.0 API', () => {
             process.env.TEST_HOST = 'example.com';
             process.env.TEST_PORT = '3306';
 
-            const result = AutoEnvParse.parse(config, 'TEST');
+            const result = AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(result).toBe(config); // Returns the same object
             expect(result.host).toBe('example.com');
@@ -65,7 +65,7 @@ describe('Index Exports - v2.0 API', () => {
             process.env.TEST_HOST = 'created.example.com';
             process.env.TEST_PORT = '5434';
 
-            const config = AutoEnvParse.parse(TestConfig, 'TEST');
+            const config = AutoEnvParse.parse(TestConfig, { prefix: 'TEST' });
 
             expect(config).toBeInstanceOf(TestConfig);
             expect(config.host).toBe('created.example.com');
@@ -89,7 +89,7 @@ describe('Index Exports - v2.0 API', () => {
             process.env.TEST_HOST = 'example.com';
             process.env.TEST_PORT = '3306';
 
-            const result = AEP.parse(config, 'TEST');
+            const result = AEP.parse(config, { prefix: 'TEST' });
 
             expect(result).toBe(config);
             expect(result.host).toBe('example.com');
@@ -105,7 +105,7 @@ describe('Index Exports - v2.0 API', () => {
             process.env.TEST_HOST = 'db.example.com';
             process.env.TEST_PORT = '5433';
 
-            const config = AEP.parse(DatabaseConfig, 'TEST');
+            const config = AEP.parse(DatabaseConfig, { prefix: 'TEST' });
 
             expect(config).toBeInstanceOf(DatabaseConfig);
             expect(config.host).toBe('db.example.com');
@@ -125,7 +125,7 @@ describe('Index Exports - v2.0 API', () => {
             process.env.TEST_PORT = '3307';
             process.env.TEST_SSL = 'true';
 
-            const result = AutoEnvParse.parse(config, 'TEST');
+            const result = AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(result).toBe(config); // Same reference
             expect(result.host).toBe('unified.example.com');
@@ -148,7 +148,7 @@ describe('Index Exports - v2.0 API', () => {
             process.env.TEST_PORT = '8080';
             process.env.TEST_DEBUG = 'true';
 
-            const config = AutoEnvParse.parse(ServerConfig, 'TEST');
+            const config = AutoEnvParse.parse(ServerConfig, { prefix: 'TEST' });
 
             expect(config).toBeInstanceOf(ServerConfig);
             expect(config.host).toBe('server.example.com');
@@ -230,7 +230,7 @@ describe('Index Exports - v2.0 API', () => {
 
             process.env.TEST_ENVIRONMENT = 'production';
 
-            const result = AutoEnvParse.parse(config, 'TEST', overrides);
+            const result = AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(result.environment).toBe('production');
         });
@@ -249,7 +249,7 @@ describe('Index Exports - v2.0 API', () => {
             process.env.TEST_TIMEOUT = '500';
             process.env.TEST_TAGS = 'tag1, tag2, tag3';
 
-            const result = AutoEnvParse.parse(config, 'TEST', overrides);
+            const result = AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(result.timeout).toBe(1000);
             expect(result.tags).toEqual(['tag1', 'tag2', 'tag3']);
@@ -273,7 +273,7 @@ describe('Index Exports - v2.0 API', () => {
 
             process.env.TEST_RETRIES = '10';
 
-            const result = AutoEnvParse.parse(config, 'TEST', overrides);
+            const result = AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(result.retries).toBe(10);
         });
@@ -286,7 +286,7 @@ describe('Index Exports - v2.0 API', () => {
                 values: [1, 2, 3]
             };
 
-            const result = AutoEnvParse.parse(config, 'TEST');
+            const result = AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(result.tags).toEqual(['default1', 'default2']);
             expect(result.values).toEqual([1, 2, 3]);
@@ -299,7 +299,7 @@ describe('Index Exports - v2.0 API', () => {
 
             process.env.TEST_NESTED = 'value-from-env';
 
-            const result = AutoEnvParse.parse(config, 'TEST');
+            const result = AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(result.nested).toBe('value-from-env');
 
@@ -321,7 +321,7 @@ describe('Index Exports - v2.0 API', () => {
             process.env.TEST_SERVER_PORT = '4000';
             process.env.TEST_CACHE_ENABLED = 'true';
 
-            const result = AutoEnvParse.parse(config, 'TEST');
+            const result = AutoEnvParse.parse(config, { prefix: 'TEST' });
 
             expect(result.server.host).toBe('nested.example.com');
             expect(result.server.port).toBe(4000);
@@ -339,7 +339,7 @@ describe('Index Exports - v2.0 API', () => {
             process.env.TEST_DATABASE_HOST = 'prod.example.com';
             process.env.TEST_DATABASE_PORT = '5433';
 
-            const config = AutoEnvParse.parse(ComplexConfig, 'TEST');
+            const config = AutoEnvParse.parse(ComplexConfig, { prefix: 'TEST' });
 
             expect(config).toBeInstanceOf(ComplexConfig);
             expect(config.database.host).toBe('prod.example.com');
