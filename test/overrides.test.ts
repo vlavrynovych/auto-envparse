@@ -45,7 +45,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             process.env.TEST_ENVIRONMENT = 'production';
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.environment).toBe('production');
         });
@@ -61,7 +61,7 @@ describe('AutoEnvParse - Overrides', () => {
             process.env.TEST_ENVIRONMENT = 'invalid';
 
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST', overrides);
+                AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
             }).toThrow(/Invalid value for TEST_ENVIRONMENT: "invalid"/);
         });
 
@@ -75,7 +75,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             delete process.env.TEST_ENVIRONMENT;
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.environment).toBe('development');
         });
@@ -90,7 +90,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             process.env.TEST_LOG_LEVEL = 'debug';
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             // Should use the original case from allowedValues
             expect(config.logLevel).toBe('DEBUG');
@@ -107,7 +107,7 @@ describe('AutoEnvParse - Overrides', () => {
             process.env.TEST_STATUS = 'active';
 
             expect(() => {
-                AutoEnvParse.parse(config, 'TEST', overrides);
+                AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
             }).toThrow(/Invalid value for TEST_STATUS: "active"/);
         });
 
@@ -121,7 +121,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             process.env.TEST_MODE = 'write';
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.mode).toBe('write');
         });
@@ -139,7 +139,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             process.env.TEST_TIMEOUT = '500';
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.timeout).toBe(1000); // Clamped to minimum
         });
@@ -155,7 +155,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             process.env.TEST_TAGS = 'alpha, beta , gamma';
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.tags).toEqual(['alpha', 'beta', 'gamma']);
         });
@@ -171,7 +171,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             process.env.TEST_CONFIG = '{"key1":"value1","key2":"value2"}';
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.config).toEqual({ key1: 'value1', key2: 'value2' });
         });
@@ -187,7 +187,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             delete process.env.TEST_TIMEOUT;
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.timeout).toBe(30000); // Default value preserved
         });
@@ -207,7 +207,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(consoleWarnSpy).toHaveBeenCalledWith(
                 expect.stringContaining('Warning: Transform failed for TEST_DATA')
@@ -232,7 +232,7 @@ describe('AutoEnvParse - Overrides', () => {
 
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(consoleWarnSpy).toHaveBeenCalledWith(
                 'Warning: Transform failed for TEST_DATA: String error'
@@ -259,7 +259,7 @@ describe('AutoEnvParse - Overrides', () => {
             process.env.TEST_TIMEOUT = '30';
             process.env.TEST_HOSTS = 'host1.com, host2.com';
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.retries).toBe(10); // Clamped to max
             expect(config.timeout).toBe(30000); // Multiplied by 1000
@@ -280,7 +280,7 @@ describe('AutoEnvParse - Overrides', () => {
             process.env.TEST_TIMEOUT = '500';
             process.env.TEST_TAGS = 'tag1,tag2,tag3';
 
-            const config = AutoEnvParse.parse(AppConfig, 'TEST', overrides);
+            const config = AutoEnvParse.parse(AppConfig, { prefix: 'TEST', overrides: overrides });
 
             expect(config).toBeInstanceOf(AppConfig);
             expect(config.timeout).toBe(1000);
@@ -304,7 +304,7 @@ describe('AutoEnvParse - Overrides', () => {
             process.env.TEST_ENABLED = 'true';
             process.env.TEST_RATIO = '0.75';
 
-            AutoEnvParse.parse(config, 'TEST', overrides);
+            AutoEnvParse.parse(config, { prefix: 'TEST', overrides: overrides });
 
             expect(config.port).toBe(8080);
             expect(config.enabled).toBe(true);
