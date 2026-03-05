@@ -217,7 +217,8 @@ AEP.parse(config, { prefix: 'APP' });
 
 See [API.md](API.md) for complete type coercion details and edge cases.
 
----------------|---------|--------|------|
+| Default | Env Value | Result | Type |
+|---------|-----------|--------|------|
 | `'localhost'` | `'prod.com'` | `'prod.com'` | `string` |
 | `5432` | `'3306'` | `3306` | `number` |
 | `false` | `'true'` | `true` | `boolean` |
